@@ -1,0 +1,23 @@
+{
+  "name": "deezer-pitch-changer",
+  "version": "1.0.0",
+  "description": "Ajoute un réglage de vitesse et de hauteur (pitch) à l'application Deezer Desktop pour Windows.",
+  "private": true,
+  "license": "MIT",
+  "author": "Valentin Luthringer",
+  "bin": {
+    "deezer-pitch-changer": "src/cli.js"
+  },
+  "scripts": {
+    "inject": "node src/cli.js install",
+    "restore": "node src/cli.js uninstall",
+    "status": "node src/cli.js status",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "win32"
+  ]
+}
