@@ -3,6 +3,7 @@ const assert = require("node:assert");
 const path = require("path");
 const payload = require("../src/payload");
 const setup = require("../src/setup");
+const { compareVersions } = require("../src/updater");
 const { bundle } = require("../scripts/build");
 
 test("bundle inlines every local module and is valid JavaScript", () => {
@@ -25,6 +26,13 @@ test("background copy is marked as a GUI app", () => {
   assert.strictEqual(gui.readUInt16LE(0x80 + 24 + 68), 2);
   assert.strictEqual(exe.readUInt16LE(0x80 + 24 + 68), 3, "original buffer untouched");
   assert.throws(() => setup.withGuiSubsystem(Buffer.alloc(0x200)), /not a Windows executable/);
+});
+
+test("versions compare numerically", () => {
+  assert.ok(compareVersions("1.0.1", "1.0.0") > 0);
+  assert.ok(compareVersions("1.10.0", "1.9.3") > 0);
+  assert.ok(compareVersions("2.0.0", "10.0.0") < 0);
+  assert.strictEqual(compareVersions("1.2.3", "1.2.3"), 0);
 });
 
 test("an older patch is detected as outdated", () => {

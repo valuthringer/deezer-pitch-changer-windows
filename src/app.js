@@ -8,7 +8,7 @@ const patcher = require("./patcher");
 const setup = require("./setup");
 const { prompt, ask, ensureClosed, errorMessage } = require("./ui");
 
-const USAGE = `Deezer Pitch Changer v${info.label}
+const USAGE = `Deezer Pitch Changer v${info.version}
 
 Usage: DeezerPitchChanger.exe [command] [options]
 
@@ -75,10 +75,10 @@ async function install(opts) {
     const wasRunning = await ensureClosed(app, opts);
     const result = patcher.install(app.asar);
     setup.writeExecutables(fs.readFileSync(process.execPath));
-    setup.writeConfig({ deezerDir: opts.path ? app.dir : setup.readConfig().deezerDir || null, registered: info.label });
+    setup.writeConfig({ deezerDir: opts.path ? app.dir : setup.readConfig().deezerDir || null, registered: info.version });
     setup.register();
     setup.startBackground();
-    console.log(`\nPitch changer v${info.label} installed (Deezer ${result.version}).`);
+    console.log(`\nPitch changer v${info.version} installed (Deezer ${result.version}).`);
     console.log('In Deezer: "Pitch" button at the bottom right, or Alt+P.');
     console.log("It is re-applied automatically after Deezer updates, and updates itself.");
     if (opts.launch) deezer.launch(app.exe);
@@ -114,7 +114,7 @@ async function status(opts) {
 }
 
 async function interactive(opts) {
-  console.log(`Deezer Pitch Changer v${info.label}\n`);
+  console.log(`Deezer Pitch Changer v${info.version}\n`);
   if (!setup.isInstalled()) {
     console.log("Adds speed and pitch controls to the Deezer desktop app.");
     console.log("Installed for your Windows account, it is re-applied automatically after Deezer updates.\n");

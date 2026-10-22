@@ -1,5 +1,6 @@
-# Builds DeezerPitchChanger.exe on every push to main and publishes it as a GitHub release.
-# Installed copies check the latest release every few hours and update themselves.
+# Builds and tests DeezerPitchChanger.exe on every push to main. When the version in package.json
+# has no release yet, publishes it as release v<version>: installed copies check the latest
+# release every few hours and update themselves. Bump the version to ship an update.
 name: Release
 
 on:
@@ -27,32 +28,41 @@ jobs:
         with:
           node-version: 22
 
+      - name: Read the version
+        id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::package.json version must look like 1.2.3 (found $version)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$version" > /dev/null 2>&1; then
+            echo "released=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::v$version is already released: bump the version in package.json to publish an update."
+          else
+            echo "released=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - run: npm ci
 
       - run: npm test
 
       - run: npm run build
-        env:
-          BUILD_NUMBER: ${{ github.run_number }}
 
+      # Only from main, so that running the workflow by hand on another branch never ships it.
       - name: Publish the release
+        if: steps.version.outputs.released == 'false' && github.ref == 'refs/heads/main'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          build="${{ github.run_number }}"
-          version=$(node -p "require('./package.json').version")
-          git log -1 --format=%B > notes.txt
-          gh release create "build-$build" dist/DeezerPitchChanger.exe \
-            --title "v$version (build $build)" \
-            --notes-file notes.txt \
+          version="${{ steps.version.outputs.version }}"
+          gh release create "v$version" dist/DeezerPitchChanger.exe \
+            --title "v$version" \
+            --generate-notes \
             --target "${{ github.sha }}" \
             --latest
-
-      - name: Keep only the last 5 releases
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release list --limit 100 --json tagName --jq '[.[] | select(.tagName | startswith("build-"))][5:][].tagName' |
-            while read -r tag; do gh release delete "$tag" --yes --cleanup-tag; done

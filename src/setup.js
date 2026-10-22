@@ -98,7 +98,7 @@ function register() {
   reg(["add", RUN_KEY, "/v", RUN_VALUE, "/t", "REG_SZ", "/d", `"${BACKGROUND_EXE}" --background`, "/f"]);
   const values = {
     DisplayName: "Deezer Pitch Changer",
-    DisplayVersion: info.label,
+    DisplayVersion: info.version,
     Publisher: author,
     DisplayIcon: EXE,
     InstallLocation: DIR,

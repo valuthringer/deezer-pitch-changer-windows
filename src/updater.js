@@ -5,17 +5,27 @@ const info = require("./build-info");
 const ASSET = "DeezerPitchChanger.exe";
 const HEADERS = { "User-Agent": "deezer-pitch-changer", Accept: "application/vnd.github+json" };
 
-// Latest published build, or null if there is none.
+// Compares "x.y.z" versions: negative if a < b, 0 if equal, positive if a > b.
+function compareVersions(a, b) {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+  }
+  return 0;
+}
+
+// Latest published version, or null if there is none.
 async function latestRelease() {
   const res = await fetch(`https://api.github.com/repos/${info.repo}/releases/latest`, { headers: HEADERS });
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
   const release = await res.json();
-  const build = /^build-(\d+)$/.exec(release.tag_name || "");
+  const tag = /^v(\d+\.\d+\.\d+)$/.exec(release.tag_name || "");
   const asset = (release.assets || []).find((a) => a.name === ASSET);
-  if (!build || !asset) return null;
+  if (!tag || !asset) return null;
   return {
-    build: Number(build[1]),
+    version: tag[1],
     name: release.name || release.tag_name,
     url: asset.browser_download_url,
     size: asset.size,
@@ -36,4 +46,4 @@ async function download(release) {
   return exe;
 }
 
-module.exports = { latestRelease, download };
+module.exports = { compareVersions, latestRelease, download };

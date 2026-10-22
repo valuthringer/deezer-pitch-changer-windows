@@ -1,8 +1,6 @@
-// Version of this copy of the pitch changer. `build` is set by scripts/build.js (the GitHub
-// Actions run number for released executables, 0 when running from the sources).
+// Version of this copy of the pitch changer. Releases are published per version (tag v<version>,
+// see .github/workflows/release.yml): bump it in package.json to ship an update.
 const { version } = require("../package.json");
-
-const build = 0;
 
 // Running as the built executable (a Node.js single executable application).
 function isPackaged() {
@@ -15,8 +13,6 @@ function isPackaged() {
 
 module.exports = {
   version,
-  build,
-  label: build ? `${version}+${build}` : version,
   repo: "valuthringer/deezer-pitch-changer-windows",
   packaged: isPackaged(),
 };

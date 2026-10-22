@@ -1,7 +1,7 @@
 // Builds the code appended to Deezer's preload.js, and removes it again.
 const fs = require("fs");
 const path = require("path");
-const { label, packaged } = require("./build-info");
+const { version, packaged } = require("./build-info");
 
 const BEGIN = "/* deezer-pitch-changer:begin */";
 const END = "/* deezer-pitch-changer:end */";
@@ -18,7 +18,7 @@ function buildSnippet() {
   const pageScript = [
     "(() => {",
     readInject("pitch-changer.js"),
-    `deezerPitchChanger(${JSON.stringify(readInject("pitch-worklet.js"))}, ${JSON.stringify(label)});`,
+    `deezerPitchChanger(${JSON.stringify(readInject("pitch-worklet.js"))}, ${JSON.stringify(version)});`,
     "})();",
   ].join("\n");
 

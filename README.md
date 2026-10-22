@@ -63,8 +63,15 @@ The Deezer app is an Electron shell that displays the `deezer.com` web player.
   - in Pitch mode, routes the audio through **`src/inject/pitch-worklet.js`**;
   - renders the panel (inside a Shadow DOM, so Deezer's styles are untouched).
 - **`src/app.js`** is the entry point of the executable, a [Node.js single executable application](https://nodejs.org/api/single-executable-applications.html) built by **`scripts/build.js`** (no runtime dependencies). **`src/setup.js`** installs it: a copy marked as a GUI app (so no console window) starts at logon from the `HKCU\…\Run` key, and an entry is added to Windows' installed apps.
-- **`src/background.js`** is that hidden copy. It watches `app.asar`: once a Deezer update has replaced it, it patches it again when Deezer is closed, or restarts Deezer patched if its updater has just relaunched it. **`src/updater.js`** fetches newer builds from the GitHub releases (checked against their size and SHA-256).
-- **`.github/workflows/release.yml`** builds the executable and publishes a release (`build-<n>`) on every push to `main`, keeping the last 5.
+- **`src/background.js`** is that hidden copy. It watches `app.asar`: once a Deezer update has replaced it, it patches it again when Deezer is closed, or restarts Deezer patched if its updater has just relaunched it. **`src/updater.js`** fetches newer versions from the GitHub releases (checked against their size and SHA-256).
+- **`.github/workflows/release.yml`** builds and tests the executable on every push to `main`, and publishes it as release `v<version>` when the version in `package.json` has none yet.
+
+## Publishing an update
+
+1. Bump `"version"` in `package.json` (`1.0.0` → `1.0.1`, `1.1.0`…).
+2. Push (or merge) to `main`.
+
+Pushes to `main` that keep the same version are built and tested but not released, and other branches trigger nothing.
 - **The pitch shifter** is a phase vocoder with phase locking around spectral peaks (Laroche & Dolson). Both channels share the same phase rotation, which preserves the stereo image. Latency: about 85 ms. CPU: about 3% of one core.
 
 ## Limitations

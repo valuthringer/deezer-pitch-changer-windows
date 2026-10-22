@@ -110,10 +110,10 @@ async function patchIfNeeded() {
 // ---------------------------------------------------------------- self-update
 
 async function updateIfAvailable(server) {
-  if (!info.packaged || !info.build) return;
+  if (!info.packaged) return;
   setup.cleanupOldFiles();
   const release = await updater.latestRelease();
-  if (!release || release.build <= info.build) return;
+  if (!release || updater.compareVersions(release.version, info.version) <= 0) return;
   log(`downloading ${release.name}`);
   setup.writeExecutables(await updater.download(release));
   log(`installed ${release.name}, restarting`);
@@ -135,16 +135,16 @@ async function run() {
   if (!server) return; // already running
 
   setup.cleanupOldFiles();
-  if (setup.readConfig().registered !== info.label) {
+  if (setup.readConfig().registered !== info.version) {
     // Keeps the version shown in Windows' installed apps in sync after a self-update.
     try {
       setup.register();
-      setup.writeConfig({ registered: info.label });
+      setup.writeConfig({ registered: info.version });
     } catch (err) {
       log(`registration failed: ${errorMessage(err)}`);
     }
   }
-  log(`started v${info.label}`);
+  log(`started v${info.version}`);
 
   let nextUpdateCheck = Date.now() + FIRST_UPDATE_CHECK;
   for (;;) {

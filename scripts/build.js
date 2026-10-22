@@ -1,5 +1,5 @@
 // Builds dist/DeezerPitchChanger.exe: a Node.js single executable application, so users don't
-// need Node.js. Run on Windows with Node.js 22: `npm run build` (BUILD_NUMBER sets the build).
+// need Node.js. Run on Windows with Node.js 22: `npm run build`.
 // https://nodejs.org/api/single-executable-applications.html
 const { execFileSync } = require("child_process");
 const fs = require("fs");
@@ -8,7 +8,6 @@ const path = require("path");
 const ROOT = path.join(__dirname, "..");
 const DIST = path.join(ROOT, "dist");
 const EXE = path.join(DIST, "DeezerPitchChanger.exe");
-const BUILD = Number(process.env.BUILD_NUMBER || 0);
 const SEA_FUSE = "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2";
 
 // The executable runs a single script: inline every local module it requires.
@@ -20,10 +19,6 @@ function bundle(entry) {
     modules.set(id, null);
     let source = fs.readFileSync(file, "utf8").replace(/^#!.*/, "");
     if (file.endsWith(".json")) source = `module.exports = ${source};`;
-    if (id === "src/build-info.js") {
-      if (!/const build = 0;/.test(source)) throw new Error("build number not found in src/build-info.js");
-      source = source.replace("const build = 0;", `const build = ${BUILD};`);
-    }
     source = source.replace(/require\("(\.\.?\/[^"]+)"\)/g, (_, request) => {
       let target = path.resolve(path.dirname(file), request);
       if (!fs.existsSync(target)) target += ".js";
@@ -89,7 +84,7 @@ async function main() {
 
   fs.copyFileSync(process.execPath, EXE);
   removeSignature(EXE);
-  const fileVersion = `${version}.${BUILD}`;
+  const fileVersion = `${version}.0`;
   await require("rcedit")(EXE, {
     "file-version": fileVersion,
     "product-version": fileVersion,
@@ -106,7 +101,7 @@ async function main() {
   await require("postject").inject(EXE, "NODE_SEA_BLOB", fs.readFileSync(blobPath), { sentinelFuse: SEA_FUSE });
 
   const size = (fs.statSync(EXE).size / 1024 / 1024).toFixed(1);
-  console.log(`Built ${path.relative(ROOT, EXE)} (v${version}, build ${BUILD}, ${size} MB)`);
+  console.log(`Built ${path.relative(ROOT, EXE)} (v${version}, ${size} MB)`);
 }
 
 if (require.main === module) {
