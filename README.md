@@ -1,6 +1,6 @@
 # Deezer Pitch Changer
 
-Adds **speed** and **pitch** controls to the **Deezer Desktop app for Windows**.
+An unofficial JavaScript plugin that lets you adjust the **speed** and **pitch** of the audio during playback in the **Deezer Desktop app for Windows**.
 
 ![Pitch changer panel inside Deezer](screenshot.png)
 
@@ -60,7 +60,6 @@ The Deezer app is an Electron shell that displays the `deezer.com` web player.
 
 - **Pitch** mode has the typical quality of a phase vocoder: very good for small shifts (±3 semitones), more "metallic" beyond that, with slightly softened drum attacks.
 - If Deezer changes the structure of its app, the patch may need to be updated.
-- Modifying the Deezer client is not covered by Deezer's terms of use: personal use, at your own risk.
 
 ## Development
 
@@ -70,3 +69,13 @@ set DZ_DEVTOOLS=yes && "%LOCALAPPDATA%\Programs\deezer-desktop\Deezer.exe"   # D
 ```
 
 In the DevTools console, `window.__deezerPitchChanger` exposes the current state (settings, tracked audio elements, engine).
+
+## Disclaimer
+
+This is an independent, community-made project and is not affiliated with, endorsed by, or sponsored by Deezer.
+
+This project does not redistribute the Deezer application or its proprietary source code. It only modifies the copy already installed on the user's computer. Users must obtain Deezer through its official channels.
+
+Modifying the Deezer client is not covered by Deezer's terms of use. This project is intended for personal use and is provided as is, without warranty: use it at your own risk.
+
+Deezer is a trademark of its respective owner.
