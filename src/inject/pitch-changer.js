@@ -416,6 +416,14 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
       if (b) setModeValue(Number(b.dataset.value));
     });
     setupValueInput();
+    // A clicked button or slider keeps the focus, and Space would then press it instead of
+    // reaching Deezer's play/pause shortcut: hand the focus back to the page.
+    const releaseFocus = () => {
+      const el = shadow.activeElement;
+      if (el && el !== ui.num) el.blur();
+    };
+    shadow.addEventListener("click", releaseFocus);
+    shadow.addEventListener("change", releaseFocus);
     ui.panel.addEventListener("wheel", (e) => {
       if (e.target !== ui.slider) return;
       e.preventDefault();
