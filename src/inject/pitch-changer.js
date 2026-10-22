@@ -14,9 +14,9 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
   const SEMITONES_MAX = 12;
 
   const MODES = {
-    vinyl: { label: "Vitesse + hauteur", short: "V+H" },
-    speed: { label: "Vitesse", short: "Vit." },
-    pitch: { label: "Hauteur", short: "Haut." },
+    vinyl: { label: "Speed + pitch" },
+    speed: { label: "Speed" },
+    pitch: { label: "Pitch" },
   };
 
   const PRESETS = {
@@ -274,7 +274,7 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
     if (!settings.enabled) return "Off";
     const fx = effect();
     if (isNeutral(fx)) return "Pitch";
-    if (settings.mode === "pitch") return `${formatSemitones(settings.pitch)} dt`;
+    if (settings.mode === "pitch") return `${formatSemitones(settings.pitch)} st`;
     return formatRatio(settings.mode === "vinyl" ? settings.vinyl : settings.speed);
   }
 
@@ -348,7 +348,7 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
         <div class="panel" part="panel">
           <div class="head">
             <span class="title">Pitch changer</span>
-            <button class="switch" title="Activer / désactiver (Alt+Shift+P)"></button>
+            <button class="switch" title="Turn on / off (Alt+Shift+P)"></button>
           </div>
           <div class="body">
             <div class="modes">
@@ -358,7 +358,7 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
             <input type="range">
             <div class="row">
               <button data-step="-1"></button>
-              <button data-reset>Réinitialiser</button>
+              <button data-reset>Reset</button>
               <button data-step="1"></button>
             </div>
             <div class="chips"></div>
@@ -514,19 +514,19 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
 
     if (mode === "pitch") {
       Object.assign(ui.slider, { min: SEMITONES_MIN, max: SEMITONES_MAX, step: 0.01 });
-      ui.big.textContent = `${formatSemitones(value)} demi-tons`;
+      ui.big.textContent = `${formatSemitones(value)} semitones`;
       const cents = Math.round(value * 100);
-      ui.sub.textContent = `${cents > 0 ? "+" : cents < 0 ? "−" : ""}${Math.abs(cents)} cents · vitesse inchangée`;
-      ui.minus.textContent = "−1 dt";
-      ui.plus.textContent = "+1 dt";
+      ui.sub.textContent = `${cents > 0 ? "+" : cents < 0 ? "−" : ""}${Math.abs(cents)} cents · same speed`;
+      ui.minus.textContent = "−1 st";
+      ui.plus.textContent = "+1 st";
     } else {
       Object.assign(ui.slider, { min: SPEED_MIN, max: SPEED_MAX, step: 0.01 });
       ui.big.textContent = `${formatRatio(value)}`;
       ui.sub.textContent = mode === "vinyl"
-        ? `${Math.round(value * 100)} % · ${formatSemitones(12 * Math.log2(value))} demi-tons`
-        : `${Math.round(value * 100)} % · hauteur conservée`;
-      ui.minus.textContent = mode === "vinyl" ? "−1 dt" : "−5 %";
-      ui.plus.textContent = mode === "vinyl" ? "+1 dt" : "+5 %";
+        ? `${Math.round(value * 100)} % · ${formatSemitones(12 * Math.log2(value))} semitones`
+        : `${Math.round(value * 100)} % · same pitch`;
+      ui.minus.textContent = mode === "vinyl" ? "−1 st" : "−5 %";
+      ui.plus.textContent = mode === "vinyl" ? "+1 st" : "+5 %";
     }
     ui.slider.value = String(value);
 
@@ -541,11 +541,11 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
     if (!ui.status) return;
     const count = mediaElements().length;
     if (engine.error && settings.mode === "pitch") {
-      ui.status.innerHTML = `<span class="warn">Moteur audio indisponible</span>`;
+      ui.status.innerHTML = `<span class="warn">Audio engine unavailable</span>`;
     } else if (count === 0) {
-      ui.status.textContent = "Lance un titre pour appliquer";
+      ui.status.textContent = "Play a track to apply";
     } else {
-      ui.status.textContent = `v${VERSION} · lecteur détecté`;
+      ui.status.textContent = `v${VERSION} · player detected`;
     }
   }
 

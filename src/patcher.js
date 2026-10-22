@@ -61,7 +61,7 @@ function install(asarPath) {
   }
 
   const patched = withPreload(base, payload.addSnippet);
-  if (!describe(asar.parse(patched)).patched) throw new Error("Vérification du patch échouée, rien n'a été modifié.");
+  if (!describe(asar.parse(patched)).patched) throw new Error("Patch verification failed, nothing was changed.");
   writeAtomic(asarPath, patched);
   return { version: info.version, updated: info.patched };
 }

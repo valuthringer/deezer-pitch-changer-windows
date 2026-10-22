@@ -7,17 +7,17 @@ const { version } = require("../package.json");
 
 const USAGE = `deezer-pitch-changer v${version}
 
-Usage : node src/cli.js <commande> [options]
+Usage: node src/cli.js <command> [options]
 
-Commandes :
-  install     Injecte le pitch changer dans Deezer (refaire après chaque mise à jour de Deezer)
-  uninstall   Restaure Deezer d'origine
-  status      Affiche l'état de l'installation
+Commands:
+  install     Injects the pitch changer into Deezer (run again after each Deezer update)
+  uninstall   Restores the original Deezer
+  status      Shows the installation status
 
-Options :
-  --path <dossier>   Dossier d'installation de Deezer (détecté automatiquement sinon)
-  --yes, -y          Ferme Deezer sans demander s'il est ouvert
-  --no-launch        Ne relance pas Deezer à la fin
+Options:
+  --path <folder>    Deezer install folder (detected automatically otherwise)
+  --yes, -y          Close Deezer without asking if it is open
+  --no-launch        Do not relaunch Deezer at the end
 `;
 
 function parseArgs(argv) {
@@ -29,7 +29,7 @@ function parseArgs(argv) {
     else if (arg === "--no-launch") opts.launch = false;
     else if (arg === "--help" || arg === "-h") opts.command = "help";
     else if (!opts.command) opts.command = arg;
-    else throw new Error(`Argument inconnu : ${arg}`);
+    else throw new Error(`Unknown argument: ${arg}`);
   }
   return opts;
 }
@@ -44,7 +44,7 @@ function ask(question) {
       resolve(answered);
     });
     rl.question(question, (answer) => {
-      answered = /^(o|oui|y|yes)?$/i.test(answer.trim());
+      answered = /^(y|yes)?$/i.test(answer.trim());
       rl.close();
     });
   });
@@ -53,10 +53,10 @@ function ask(question) {
 // Deezer must be closed while app.asar is rewritten. Returns true if it was running.
 async function ensureClosed(app, opts) {
   if (!deezer.isRunning(app.exe)) return false;
-  if (!opts.yes && !(await ask("Deezer est ouvert et doit être fermé. Le fermer maintenant ? [O/n] "))) {
-    throw new Error("Annulé : ferme Deezer puis relance la commande.");
+  if (!opts.yes && !(await ask("Deezer is open and must be closed. Close it now? [Y/n] "))) {
+    throw new Error("Cancelled: close Deezer and run the command again.");
   }
-  console.log("Fermeture de Deezer…");
+  console.log("Closing Deezer…");
   await deezer.stop(app.exe);
   return true;
 }
@@ -69,38 +69,38 @@ async function main() {
   }
 
   const app = deezer.locate(opts.path);
-  console.log(`Deezer : ${app.dir}`);
+  console.log(`Deezer folder  : ${app.dir}`);
 
   switch (opts.command) {
     case "status": {
       const s = patcher.status(app.asar);
-      console.log(`Version de Deezer : ${s.version}`);
-      console.log(`Pitch changer     : ${s.patched ? "installé" : "non installé"}`);
-      console.log(`Sauvegarde        : ${s.backupVersion ? `oui (Deezer ${s.backupVersion})` : "non"}`);
-      console.log(`Deezer ouvert     : ${deezer.isRunning(app.exe) ? "oui" : "non"}`);
+      console.log(`Deezer version : ${s.version}`);
+      console.log(`Pitch changer  : ${s.patched ? "installed" : "not installed"}`);
+      console.log(`Backup         : ${s.backupVersion ? `yes (Deezer ${s.backupVersion})` : "no"}`);
+      console.log(`Deezer running : ${deezer.isRunning(app.exe) ? "yes" : "no"}`);
       return;
     }
     case "install": {
       await ensureClosed(app, opts);
       const result = patcher.install(app.asar);
       console.log(result.updated
-        ? `Pitch changer mis à jour (Deezer ${result.version}).`
-        : `Pitch changer installé (Deezer ${result.version}). Sauvegarde : app.asar.pitch-changer-backup`);
-      console.log("Dans Deezer : bouton « Pitch » en bas à droite, ou Alt+P.");
+        ? `Pitch changer updated (Deezer ${result.version}).`
+        : `Pitch changer installed (Deezer ${result.version}). Backup: app.asar.pitch-changer-backup`);
+      console.log('In Deezer: "Pitch" button at the bottom right, or Alt+P.');
       break;
     }
     case "uninstall": {
       await ensureClosed(app, opts);
       const result = patcher.uninstall(app.asar);
-      console.log(result.changed ? `Deezer ${result.version} restauré d'origine.` : "Le pitch changer n'était pas installé.");
+      console.log(result.changed ? `Deezer ${result.version} restored to its original state.` : "The pitch changer was not installed.");
       break;
     }
     default:
-      throw new Error(`Commande inconnue : ${opts.command}\n\n${USAGE}`);
+      throw new Error(`Unknown command: ${opts.command}\n\n${USAGE}`);
   }
 
   if (opts.launch) {
-    console.log("Lancement de Deezer…");
+    console.log("Launching Deezer…");
     deezer.launch(app.exe);
   }
 }
@@ -108,9 +108,9 @@ async function main() {
 main().catch((err) => {
   const code = err && err.code;
   if (code === "EBUSY" || code === "EPERM" || code === "EACCES") {
-    console.error(`\nErreur : fichier verrouillé ou accès refusé (${code}). Vérifie que Deezer est bien fermé (zone de notification) et réessaie.`);
+    console.error(`\nError: file locked or access denied (${code}). Make sure Deezer is fully closed (including the notification area) and try again.`);
   } else {
-    console.error(`\nErreur : ${err && err.message ? err.message : err}`);
+    console.error(`\nError: ${err && err.message ? err.message : err}`);
   }
   process.exitCode = 1;
 });

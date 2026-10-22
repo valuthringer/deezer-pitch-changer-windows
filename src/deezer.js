@@ -24,7 +24,7 @@ function locate(customDir) {
     }
   }
   const searched = dirs.map((d) => `  - ${d}`).join("\n");
-  throw new Error(`Deezer Desktop introuvable. Dossiers cherchés :\n${searched}\nIndique le dossier avec --path "C:\\...\\deezer-desktop".`);
+  throw new Error(`Deezer Desktop not found. Folders searched:\n${searched}\nSpecify the folder with --path "C:\\...\\deezer-desktop".`);
 }
 
 // PIDs of the Deezer processes started from this install (other copies are left alone).
@@ -61,7 +61,7 @@ async function stop(exe) {
   for (let i = 0; i < 20 && isRunning(exe); i++) await sleep(250);
   if (isRunning(exe)) kill(true);
   for (let i = 0; i < 20 && isRunning(exe); i++) await sleep(250);
-  if (isRunning(exe)) throw new Error("Impossible de fermer Deezer. Ferme-le manuellement (y compris depuis la zone de notification) puis relance.");
+  if (isRunning(exe)) throw new Error("Could not close Deezer. Close it manually (including from the notification area) and try again.");
   // Give Windows a moment to release the file handles on app.asar.
   await sleep(500);
 }
