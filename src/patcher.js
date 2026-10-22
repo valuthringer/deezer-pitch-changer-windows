@@ -11,9 +11,11 @@ function backupPaths(asarPath) {
 }
 
 function describe(archive) {
+  const preload = asar.readFile(archive, PRELOAD).toString("utf8");
   return {
     version: JSON.parse(asar.readFile(archive, "package.json").toString("utf8")).version,
-    patched: payload.isPatched(asar.readFile(archive, PRELOAD).toString("utf8")),
+    patched: payload.isPatched(preload),
+    current: payload.isCurrent(preload),
   };
 }
 

@@ -5,6 +5,10 @@
   "private": true,
   "license": "MIT",
   "author": "Valentin Luthringer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/valuthringer/deezer-pitch-changer-windows.git"
+  },
   "bin": {
     "deezer-pitch-changer": "src/cli.js"
   },
@@ -12,12 +16,17 @@
     "inject": "node src/cli.js install",
     "restore": "node src/cli.js uninstall",
     "status": "node src/cli.js status",
-    "test": "node --test"
+    "test": "node --test",
+    "build": "node scripts/build.js"
   },
   "engines": {
     "node": ">=18"
   },
   "os": [
     "win32"
-  ]
+  ],
+  "devDependencies": {
+    "postject": "1.0.0-alpha.6",
+    "rcedit": "4.0.1"
+  }
 }

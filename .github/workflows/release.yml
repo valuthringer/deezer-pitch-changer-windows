@@ -1,0 +1,58 @@
+# Builds DeezerPitchChanger.exe on every push to main and publishes it as a GitHub release.
+# Installed copies check the latest release every few hours and update themselves.
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "screenshot.png"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+
+      - run: npm test
+
+      - run: npm run build
+        env:
+          BUILD_NUMBER: ${{ github.run_number }}
+
+      - name: Publish the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build="${{ github.run_number }}"
+          version=$(node -p "require('./package.json').version")
+          git log -1 --format=%B > notes.txt
+          gh release create "build-$build" dist/DeezerPitchChanger.exe \
+            --title "v$version (build $build)" \
+            --notes-file notes.txt \
+            --target "${{ github.sha }}" \
+            --latest
+
+      - name: Keep only the last 5 releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --limit 100 --json tagName --jq '[.[] | select(.tagName | startswith("build-"))][5:][].tagName' |
+            while read -r tag; do gh release delete "$tag" --yes --cleanup-tag; done

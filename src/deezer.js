@@ -30,7 +30,8 @@ function locate(customDir) {
 // PIDs of the Deezer processes started from this install (other copies are left alone).
 function processes(exe) {
   const script = `Get-CimInstance Win32_Process -Filter "Name='${EXE_NAME}'" | ForEach-Object { "$($_.ProcessId)|$($_.ExecutablePath)" }`;
-  const out = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8" });
+  // windowsHide: the background process has no console, a new one would flash on screen.
+  const out = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", windowsHide: true });
   const target = path.resolve(exe).toLowerCase();
   return out
     .split(/\r?\n/)
@@ -52,7 +53,7 @@ async function stop(exe) {
     const pids = processes(exe).flatMap((pid) => ["/PID", pid]);
     if (pids.length === 0) return;
     try {
-      execFileSync("taskkill", [...(force ? ["/F"] : []), ...pids], { stdio: "ignore" });
+      execFileSync("taskkill", [...(force ? ["/F"] : []), ...pids], { stdio: "ignore", windowsHide: true });
     } catch {
       // Already gone, or refused a graceful close.
     }

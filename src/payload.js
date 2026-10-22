@@ -1,12 +1,14 @@
 // Builds the code appended to Deezer's preload.js, and removes it again.
 const fs = require("fs");
 const path = require("path");
-const { version } = require("../package.json");
+const { label, packaged } = require("./build-info");
 
 const BEGIN = "/* deezer-pitch-changer:begin */";
 const END = "/* deezer-pitch-changer:end */";
 
+// In the executable, the injected scripts are bundled as assets (see scripts/build.js).
 function readInject(name) {
+  if (packaged) return require("node:sea").getAsset(name, "utf8");
   return fs.readFileSync(path.join(__dirname, "inject", name), "utf8");
 }
 
@@ -16,7 +18,7 @@ function buildSnippet() {
   const pageScript = [
     "(() => {",
     readInject("pitch-changer.js"),
-    `deezerPitchChanger(${JSON.stringify(readInject("pitch-worklet.js"))}, ${JSON.stringify(version)});`,
+    `deezerPitchChanger(${JSON.stringify(readInject("pitch-worklet.js"))}, ${JSON.stringify(label)});`,
     "})();",
   ].join("\n");
 
@@ -38,6 +40,11 @@ function isPatched(preloadSource) {
   return preloadSource.includes(BEGIN);
 }
 
+// Patched with this exact version of the pitch changer.
+function isCurrent(preloadSource) {
+  return preloadSource.includes(buildSnippet());
+}
+
 function removeSnippet(preloadSource) {
   const start = preloadSource.indexOf(BEGIN);
   if (start === -1) return preloadSource;
@@ -50,4 +57,4 @@ function addSnippet(preloadSource) {
   return `${removeSnippet(preloadSource)}\n${buildSnippet()}\n`;
 }
 
-module.exports = { addSnippet, removeSnippet, isPatched, buildSnippet };
+module.exports = { addSnippet, removeSnippet, isPatched, isCurrent, buildSnippet };

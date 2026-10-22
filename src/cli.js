@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // deezer-pitch-changer: adds speed / pitch controls to the Deezer desktop app on Windows.
-const readline = require("readline");
 const deezer = require("./deezer");
 const patcher = require("./patcher");
+const { ensureClosed, errorMessage } = require("./ui");
 const { version } = require("../package.json");
 
 const USAGE = `deezer-pitch-changer v${version}
@@ -32,33 +32,6 @@ function parseArgs(argv) {
     else throw new Error(`Unknown argument: ${arg}`);
   }
   return opts;
-}
-
-// Yes/no prompt; Enter means yes, a closed input (no terminal) means no.
-function ask(question) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    let answered = false;
-    rl.on("close", () => {
-      if (!answered) process.stdout.write("\n");
-      resolve(answered);
-    });
-    rl.question(question, (answer) => {
-      answered = /^(y|yes)?$/i.test(answer.trim());
-      rl.close();
-    });
-  });
-}
-
-// Deezer must be closed while app.asar is rewritten. Returns true if it was running.
-async function ensureClosed(app, opts) {
-  if (!deezer.isRunning(app.exe)) return false;
-  if (!opts.yes && !(await ask("Deezer is open and must be closed. Close it now? [Y/n] "))) {
-    throw new Error("Cancelled: close Deezer and run the command again.");
-  }
-  console.log("Closing Deezer…");
-  await deezer.stop(app.exe);
-  return true;
 }
 
 async function main() {
@@ -106,11 +79,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  const code = err && err.code;
-  if (code === "EBUSY" || code === "EPERM" || code === "EACCES") {
-    console.error(`\nError: file locked or access denied (${code}). Make sure Deezer is fully closed (including the notification area) and try again.`);
-  } else {
-    console.error(`\nError: ${err && err.message ? err.message : err}`);
-  }
+  console.error(`\nError: ${errorMessage(err)}`);
   process.exitCode = 1;
 });
