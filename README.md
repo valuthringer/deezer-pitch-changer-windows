@@ -17,11 +17,14 @@ Three modes:
 1. Download **`DeezerPitchChanger.exe`** from the [latest release](https://github.com/valuthringer/deezer-pitch-changer-windows/releases/latest).
 2. Double-click it and confirm. If Deezer is open, it offers to close it, then relaunches it once the patch is applied.
 
+> Works with Deezer from [deezer.com/download](https://www.deezer.com/download) and with the **Microsoft Store** version.
+
 > The executable isn't signed: Windows SmartScreen may show "Windows protected your PC". Click **More info** → **Run anyway**.
 
 It installs itself for your Windows account (in `%LOCALAPPDATA%\Programs\deezer-pitch-changer`, no administrator rights needed) and then runs hidden in the background:
 
 - **after a Deezer update** (which removes the patch), it patches Deezer again on its own;
+- with the **Microsoft Store** version, whose files can't be modified, it adds the pitch changer each time Deezer starts (a few seconds after it opens);
 - **when a new version is published** here, it updates itself (checked at logon, then every 6 hours) and applies it the next time Deezer is closed.
 
 In Deezer, a **Pitch** button appears at the bottom right (drag it to move it):
@@ -64,6 +67,7 @@ The Deezer app is an Electron shell that displays the `deezer.com` web player.
   - renders the panel (inside a Shadow DOM, so Deezer's styles are untouched).
 - **`src/app.js`** is the entry point of the executable, a [Node.js single executable application](https://nodejs.org/api/single-executable-applications.html) built by **`scripts/build.js`** (no runtime dependencies). **`src/setup.js`** installs it: a copy marked as a GUI app (so no console window) starts at logon from the `HKCU\…\Run` key, and an entry is added to Windows' installed apps.
 - **`src/background.js`** is that hidden copy. It watches `app.asar`: once a Deezer update has replaced it, it patches it again when Deezer is closed, or restarts Deezer patched if its updater has just relaunched it. **`src/updater.js`** fetches newer versions from the GitHub releases (checked against their size and SHA-256).
+- **`src/store.js`** handles the Microsoft Store version (an MSIX package, read-only). When Deezer starts (seen through its data folder), the background process asks its main process to open the Node.js inspector (`process._debugProcess`), registers the same snippet as a preload script of Deezer's sessions, reloads the page if it was already loaded, and closes the inspector again. Nothing is written to Deezer's files.
 - **`.github/workflows/release.yml`** builds and tests the executable on every push to `main`, and publishes it as release `v<version>` when the version in `package.json` has none yet.
 
 ## Publishing an update
@@ -76,6 +80,7 @@ Pushes to `main` that keep the same version are built and tested but not release
 
 ## Limitations
 
+- With the Microsoft Store version, the button appears a few seconds after Deezer opens (the page reloads once), and only while the background process runs. The inspector briefly listens on `127.0.0.1:9229`: if another program uses that port, the pitch changer can't be added (see the log).
 - **Pitch** mode has the typical quality of a phase vocoder: very good for small shifts (±3 semitones), more "metallic" beyond that, with slightly softened drum attacks.
 - If Deezer changes the structure of its app, the patch may need to be updated.
 - The executable embeds the Node.js runtime, hence its size (about 80 MB, downloaded again for each update).

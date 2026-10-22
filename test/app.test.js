@@ -1,8 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const path = require("path");
+const deezer = require("../src/deezer");
 const payload = require("../src/payload");
+const { errorMessage } = require("../src/ui");
 const setup = require("../src/setup");
+const store = require("../src/store");
 const { compareVersions } = require("../src/updater");
 const { bundle } = require("../scripts/build");
 
@@ -26,6 +29,27 @@ test("background copy is marked as a GUI app", () => {
   assert.strictEqual(gui.readUInt16LE(0x80 + 24 + 68), 2);
   assert.strictEqual(exe.readUInt16LE(0x80 + 24 + 68), 3, "original buffer untouched");
   assert.throws(() => setup.withGuiSubsystem(Buffer.alloc(0x200)), /not a Windows executable/);
+});
+
+test("the Microsoft Store version of Deezer is reported as unsupported", () => {
+  const store = "C:\\Program Files\\WindowsApps\\Deezer.62021768415AF_7.0.0.0_x64__q7m17pa7q8kj0";
+  assert.throws(() => deezer.locate(store), (err) => err.code === "DEEZER_STORE");
+  assert.match(errorMessage(Object.assign(new Error(), { code: "DEEZER_STORE" })), /Microsoft Store/);
+  assert.throws(() => deezer.locate(path.join(__dirname, "no-deezer-here")), (err) => err.code === "DEEZER_NOT_FOUND");
+});
+
+test("the main process of the Store Deezer is told apart from its helpers", () => {
+  const exe = "C:\\Program Files\\WindowsApps\\Deezer.62021768415AF_8.0.10.0_x86__q7m17pa7q8kj0\\app\\Deezer.exe";
+  assert.ok(deezer.isStoreMain(exe, `"${exe}" `));
+  assert.ok(!deezer.isStoreMain(exe, `"${exe}" --type=renderer --user-data-dir=...`));
+  assert.ok(!deezer.isStoreMain("C:\\Users\\me\\AppData\\Local\\Programs\\deezer-desktop\\Deezer.exe", ""));
+});
+
+test("the code sent to the Store Deezer is self-contained and checks the process", () => {
+  const source = `(${store.hook.toString()})("/* snippet */", 1234)`;
+  assert.doesNotThrow(() => new Function(source));
+  // Run against another process id: must stop before touching Electron.
+  assert.strictEqual(new Function("require", "process", `return ${source}`)(() => assert.fail("required"), { pid: 1 }), "wrong-process");
 });
 
 test("versions compare numerically", () => {

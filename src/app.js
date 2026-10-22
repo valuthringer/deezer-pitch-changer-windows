@@ -6,6 +6,7 @@ const deezer = require("./deezer");
 const info = require("./build-info");
 const patcher = require("./patcher");
 const setup = require("./setup");
+const storeInjection = require("./store");
 const { prompt, ask, ensureClosed, errorMessage } = require("./ui");
 
 const USAGE = `Deezer Pitch Changer v${info.version}
@@ -44,6 +45,24 @@ function locate(opts) {
   return deezer.locate(opts.path || setup.readConfig().deezerDir || undefined);
 }
 
+// The version from the website (patched) and / or the Microsoft Store one (store.js).
+function findDeezer(opts) {
+  let web = null;
+  try {
+    web = locate(opts);
+  } catch (err) {
+    if (opts.path || err.code !== "DEEZER_NOT_FOUND") throw err;
+  }
+  const store = opts.path ? null : deezer.storeInstall();
+  if (!web && !store) locate(opts); // throws "not found"
+  return { web, store };
+}
+
+function printDeezer({ web, store }) {
+  if (web) console.log(`Deezer                 : ${web.dir}`);
+  if (store) console.log(`Deezer (Microsoft Store): version ${store.version}`);
+}
+
 function backgroundRunning() {
   return new Promise((resolve) => {
     const socket = net.connect(setup.PIPE, () => {
@@ -69,36 +88,47 @@ async function install(opts) {
   if (!info.packaged) {
     throw new Error("Installing needs the built executable (npm run build). To only patch Deezer, use src/cli.js.");
   }
-  const app = locate(opts);
-  console.log(`Deezer folder : ${app.dir}`);
+  const { web, store } = findDeezer(opts);
+  printDeezer({ web, store });
   await withBackgroundStopped(async () => {
-    const wasRunning = await ensureClosed(app, opts);
-    const result = patcher.install(app.asar);
+    let result = null;
+    if (web) {
+      await ensureClosed(web, opts);
+      result = patcher.install(web.asar);
+    }
     setup.writeExecutables(fs.readFileSync(process.execPath));
-    setup.writeConfig({ deezerDir: opts.path ? app.dir : setup.readConfig().deezerDir || null, registered: info.version });
+    setup.writeConfig({ deezerDir: opts.path ? web.dir : setup.readConfig().deezerDir || null, registered: info.version });
     setup.register();
+    // Also adds the pitch changer to a Store Deezer that is already open.
     setup.startBackground();
-    console.log(`\nPitch changer v${info.version} installed (Deezer ${result.version}).`);
-    console.log('In Deezer: "Pitch" button at the bottom right, or Alt+P.');
-    console.log("It is re-applied automatically after Deezer updates, and updates itself.");
-    if (opts.launch) deezer.launch(app.exe);
+    const storeOpen = store && deezer.storeMainProcesses().length > 0;
+
+    console.log(`\nPitch changer v${info.version} installed.`);
+    if (web) console.log(`- Deezer ${result.version} patched, and patched again automatically after Deezer updates.`);
+    if (store) console.log(`- Deezer from the Microsoft Store: added each time it starts${storeOpen ? " (the open window reloads in a few seconds)" : ""}.`);
+    console.log('In Deezer: "Pitch" button at the bottom right, or Alt+P. The pitch changer updates itself.');
+    if (opts.launch && web) deezer.launch(web.exe);
+    else if (opts.launch && !storeOpen) deezer.launchStore(store);
   });
 }
 
 async function uninstall(opts) {
-  let app = null;
+  let found = { web: null, store: null };
   try {
-    app = locate(opts);
+    found = findDeezer(opts);
   } catch {
     // Deezer was uninstalled first: only remove the pitch changer.
   }
+  const { web, store } = found;
   await withBackgroundStopped(async () => {
-    const wasRunning = app ? await ensureClosed(app, opts) : false;
-    if (app) patcher.uninstall(app.asar);
+    const wasRunning = web ? await ensureClosed(web, opts) : false;
+    if (web) patcher.uninstall(web.asar);
+    if (store) storeInjection.removePreload(store);
     setup.unregister();
     setup.removeFiles();
-    console.log(app ? `Pitch changer uninstalled, Deezer restored.` : "Pitch changer uninstalled.");
-    if (app && wasRunning && opts.launch) deezer.launch(app.exe);
+    console.log(web ? "Pitch changer uninstalled, Deezer restored." : "Pitch changer uninstalled.");
+    if (store && deezer.storeMainProcesses().length > 0) console.log("Restart Deezer to remove it from the open window.");
+    if (web && wasRunning && opts.launch) deezer.launch(web.exe);
   });
 }
 
@@ -106,11 +136,16 @@ async function status(opts) {
   const config = setup.readConfig();
   console.log(`Pitch changer  : ${setup.isInstalled() ? `installed (v${config.registered || "?"})` : "not installed"} in ${setup.DIR}`);
   console.log(`Background     : ${(await backgroundRunning()) ? "running" : "not running"}`);
-  const app = locate(opts);
-  const s = patcher.status(app.asar);
-  console.log(`Deezer folder  : ${app.dir}`);
-  console.log(`Deezer version : ${s.version}`);
-  console.log(`Deezer patched : ${s.current ? "yes" : s.patched ? "yes, by another version" : "no"}`);
+  const { web, store } = findDeezer(opts);
+  if (web) {
+    const s = patcher.status(web.asar);
+    console.log(`Deezer folder  : ${web.dir}`);
+    console.log(`Deezer version : ${s.version}`);
+    console.log(`Deezer patched : ${s.current ? "yes" : s.patched ? "yes, by another version" : "no"}`);
+  }
+  if (store) {
+    console.log(`Deezer (Store) : version ${store.version}, pitch changer added by the background process when it starts`);
+  }
 }
 
 async function interactive(opts) {

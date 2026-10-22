@@ -15,29 +15,79 @@ function candidateDirs() {
   ].filter(Boolean);
 }
 
+function failure(code, message) {
+  return Object.assign(new Error(message), { code });
+}
+
 function locate(customDir) {
   const dirs = customDir ? [path.resolve(customDir)] : candidateDirs();
   for (const dir of dirs) {
+    if (/[\\/]WindowsApps[\\/]/i.test(dir)) throw failure("DEEZER_STORE", `${dir} is the Microsoft Store version of Deezer.`);
     const asar = path.join(dir, "resources", "app.asar");
     if (fs.existsSync(path.join(dir, EXE_NAME)) && fs.existsSync(asar)) {
       return { dir, exe: path.join(dir, EXE_NAME), asar };
     }
   }
   const searched = dirs.map((d) => `  - ${d}`).join("\n");
-  throw new Error(`Deezer Desktop not found. Folders searched:\n${searched}\nSpecify the folder with --path "C:\\...\\deezer-desktop".`);
+  throw failure("DEEZER_NOT_FOUND", `Deezer Desktop not found. Folders searched:\n${searched}\nSpecify the folder with --path "C:\\...\\deezer-desktop".`);
+}
+
+function powershell(script) {
+  // windowsHide: the background process has no console, a new one would flash on screen.
+  return execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", windowsHide: true });
+}
+
+// The Microsoft Store version of Deezer (an MSIX package), or null. Windows keeps its files
+// read-only, so it isn't patched: store.js adds the pitch changer to it while it runs.
+function storeInstall() {
+  const script = [
+    "$p = Get-AppxPackage -Name 'Deezer.*' | Select-Object -First 1",
+    "if ($p) {",
+    "  $app = (Get-AppxPackageManifest $p).Package.Applications.Application | Select-Object -First 1",
+    "  [pscustomobject]@{ dir = $p.InstallLocation; family = $p.PackageFamilyName; version = $p.Version.ToString(); appId = $app.Id } | ConvertTo-Json -Compress",
+    "}",
+  ].join("\n");
+  try {
+    const out = powershell(script).trim();
+    if (!out) return null;
+    const pkg = JSON.parse(out);
+    const exe = path.join(pkg.dir, "app", EXE_NAME);
+    if (!fs.existsSync(exe)) return null;
+    return {
+      dir: pkg.dir,
+      exe,
+      version: pkg.version.replace(/\.0$/, ""),
+      appUserModelId: `${pkg.family}!${pkg.appId}`,
+      // Packaged apps see %APPDATA% redirected to their own folder.
+      userData: path.join(process.env.LOCALAPPDATA || "", "Packages", pkg.family, "LocalCache", "Roaming", "Deezer"),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function listProcesses() {
+  const script = `Get-CimInstance Win32_Process -Filter "Name='${EXE_NAME}'" | ForEach-Object { "$($_.ProcessId)|$($_.ExecutablePath)|$($_.CommandLine)" }`;
+  return powershell(script)
+    .split(/\r?\n/)
+    .map((line) => line.trim().split("|"))
+    .filter(([pid, file]) => pid && file)
+    .map(([pid, file, ...commandLine]) => ({ pid: Number(pid), file, commandLine: commandLine.join("|") }));
 }
 
 // PIDs of the Deezer processes started from this install (other copies are left alone).
 function processes(exe) {
-  const script = `Get-CimInstance Win32_Process -Filter "Name='${EXE_NAME}'" | ForEach-Object { "$($_.ProcessId)|$($_.ExecutablePath)" }`;
-  // windowsHide: the background process has no console, a new one would flash on screen.
-  const out = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", windowsHide: true });
   const target = path.resolve(exe).toLowerCase();
-  return out
-    .split(/\r?\n/)
-    .map((line) => line.trim().split("|"))
-    .filter(([pid, file]) => pid && file && path.resolve(file).toLowerCase() === target)
-    .map(([pid]) => pid);
+  return listProcesses().filter((p) => path.resolve(p.file).toLowerCase() === target).map((p) => String(p.pid));
+}
+
+// Main process of a Store Deezer (helper processes have a --type= argument).
+function isStoreMain(file, commandLine) {
+  return /[\\/]WindowsApps[\\/]Deezer\.[^\\/]+[\\/]app[\\/]Deezer\.exe$/i.test(file) && !/\s--type=/.test(commandLine);
+}
+
+function storeMainProcesses() {
+  return listProcesses().filter((p) => isStoreMain(p.file, p.commandLine)).map((p) => p.pid);
 }
 
 function isRunning(exe) {
@@ -75,4 +125,9 @@ function launch(exe) {
   child.unref();
 }
 
-module.exports = { locate, isRunning, stop, launch };
+// A packaged app is started through its app id, so that it runs as part of its package.
+function launchStore(store) {
+  spawn("explorer.exe", [`shell:AppsFolder\\${store.appUserModelId}`], { detached: true, stdio: "ignore" }).unref();
+}
+
+module.exports = { locate, storeInstall, storeMainProcesses, isStoreMain, isRunning, stop, launch, launchStore };

@@ -37,6 +37,13 @@ async function ensureClosed(app, opts) {
 
 function errorMessage(err) {
   const code = err && err.code;
+  if (code === "DEEZER_STORE") {
+    return "That's the Microsoft Store version of Deezer: it is found automatically, run this without --path.";
+  }
+  // Only from cli.js: the executable handles the Store version (store.js).
+  if (code === "DEEZER_NOT_FOUND" && deezer.storeInstall()) {
+    return "Only the Microsoft Store version of Deezer is installed. Its files can't be patched: use DeezerPitchChanger.exe, which adds the pitch changer each time Deezer starts.";
+  }
   if (code === "EBUSY" || code === "EPERM" || code === "EACCES") {
     return `File locked or access denied (${code}). Make sure Deezer is fully closed (including the notification area) and try again.`;
   }
