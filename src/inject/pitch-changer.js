@@ -260,14 +260,19 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
 
   // ---------------------------------------------------------------- formatting
 
-  function formatSemitones(st) {
-    const v = Math.abs(st) < 0.005 ? 0 : st;
-    const text = Number.isInteger(round(v, 0.01)) ? round(v, 1).toFixed(0) : v.toFixed(2);
+  // At least 2 decimals, a third one only when it is set (1.5 → "1.50", 1.024 → "1.024").
+  function formatDecimal(v, digits = 3) {
+    return v.toFixed(digits).replace(/(\.\d\d\d*?)0+$/, "$1");
+  }
+
+  function formatSemitones(st, digits = 3) {
+    const v = Math.abs(st) < 0.5 * 10 ** -digits ? 0 : st;
+    const text = Number.isInteger(round(v, 10 ** -digits)) ? round(v, 1).toFixed(0) : formatDecimal(v, digits);
     return `${v > 0 ? "+" : v < 0 ? "−" : "±"}${text.replace("-", "")}`;
   }
 
   function formatRatio(r) {
-    return `×${r.toFixed(2)}`;
+    return `×${formatDecimal(r)}`;
   }
 
   function badgeText() {
@@ -317,7 +322,15 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
     .modes button { border: none; border-radius: 7px; padding: 7px 4px; background: transparent; color: var(--muted); cursor: pointer; font-size: 12px; font-weight: 600; }
     .modes button.sel { background: var(--bg3); color: var(--fg); }
     .value { text-align: center; margin-bottom: 10px; }
-    .value .big { font-size: 30px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+    .value .big { display: inline-block; cursor: text; font-size: 30px; font-weight: 700; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+    .value .num {
+      font: inherit; letter-spacing: inherit; color: inherit; text-align: center; background: transparent;
+      border: none; border-bottom: 2px dashed transparent; padding: 0 2px; margin: 0; outline: none; cursor: text;
+      min-width: 2ch; max-width: 100%;
+    }
+    .value .num:hover { border-bottom-color: var(--bg3); }
+    .value .num:focus { border-bottom-color: var(--accent); }
+    .value .num.invalid { border-bottom-color: #ff8a80; }
     .value .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
     input[type=range] { width: 100%; accent-color: var(--accent); margin: 6px 0 10px; cursor: pointer; }
     .row { display: flex; gap: 6px; }
@@ -354,7 +367,10 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
             <div class="modes">
               ${Object.entries(MODES).map(([id, m]) => `<button data-mode="${id}">${m.label}</button>`).join("")}
             </div>
-            <div class="value"><div class="big"></div><div class="sub"></div></div>
+            <div class="value">
+              <label class="big"><span class="prefix"></span><input class="num" type="text" inputmode="decimal" spellcheck="false" autocomplete="off"><span class="unit"></span></label>
+              <div class="sub"></div>
+            </div>
             <input type="range">
             <div class="row">
               <button data-step="-1"></button>
@@ -376,7 +392,9 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
       fab: $(".fab"),
       label: $(".fab .label"),
       power: $(".switch"),
-      big: $(".value .big"),
+      num: $(".value .num"),
+      prefix: $(".value .prefix"),
+      unit: $(".value .unit"),
       sub: $(".value .sub"),
       slider: $("input[type=range]"),
       minus: $("[data-step='-1']"),
@@ -397,6 +415,7 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
       const b = e.target.closest("button[data-value]");
       if (b) setModeValue(Number(b.dataset.value));
     });
+    setupValueInput();
     ui.panel.addEventListener("wheel", (e) => {
       if (e.target !== ui.slider) return;
       e.preventDefault();
@@ -464,10 +483,11 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
     return settings[settings.mode];
   }
 
-  function setModeValue(value) {
+  // Slider, buttons and presets work in hundredths; a typed value keeps a third decimal.
+  function setModeValue(value, precision = 0.01) {
     const v = settings.mode === "pitch"
-      ? clamp(round(value, 0.01), SEMITONES_MIN, SEMITONES_MAX)
-      : clamp(round(value, 0.01), SPEED_MIN, SPEED_MAX);
+      ? clamp(round(value, precision), SEMITONES_MIN, SEMITONES_MAX)
+      : clamp(round(value, precision), SPEED_MIN, SPEED_MAX);
     update({ [settings.mode]: v });
   }
 
@@ -487,6 +507,65 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
     } else {
       const step = fine ? 0.01 : 0.05;
       setModeValue(round(v, step) + direction * step);
+    }
+  }
+
+  // ---------- typed value
+
+  // Accepts "1.5", "+1,5", "−2", "×1.25", "125 %" (speed modes), "3 st" (Speed + pitch mode).
+  function parseTyped(text) {
+    const t = text.trim().toLowerCase().replace(/[−–]/g, "-").replace(",", ".").replace(/[×x±\s]/g, "");
+    const m = t.match(/^([+-]?(?:\d+\.?\d*|\.\d+))(%|st)?$/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    const unit = m[2];
+    if (settings.mode === "pitch") return unit === "%" ? null : n;
+    if (unit === "st") return settings.mode === "vinyl" ? Math.pow(2, n / 12) : null;
+    if (n <= 0) return null;
+    return unit === "%" ? n / 100 : n;
+  }
+
+  function valueText() {
+    return settings.mode === "pitch" ? formatSemitones(modeValue()) : formatDecimal(modeValue());
+  }
+
+  function fitInput() {
+    ui.num.style.width = `${Math.max(2, ui.num.value.length) + 0.5}ch`;
+  }
+
+  function setupValueInput() {
+    const input = ui.num;
+    input.title = "Click to type a value";
+    input.addEventListener("focus", () => input.select());
+    input.addEventListener("input", () => {
+      input.classList.add("typing");
+      input.classList.toggle("invalid", parseTyped(input.value) === null);
+      fitInput();
+    });
+    input.addEventListener("blur", () => {
+      input.classList.remove("typing");
+      const v = parseTyped(input.value);
+      if (v !== null && input.value !== valueText()) setModeValue(v, 0.001);
+      else render();
+    });
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        input.blur();
+      } else if (e.key === "Escape") {
+        input.value = valueText();
+        input.blur();
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        input.classList.remove("typing");
+        stepValue(e.key === "ArrowUp" ? 1 : -1, e.shiftKey);
+        input.select();
+      }
+    });
+    // Keep Deezer's keyboard shortcuts (space = play/pause…) from firing while typing.
+    for (const type of ["keydown", "keyup", "keypress"]) {
+      input.addEventListener(type, (e) => {
+        if (!(e.altKey && e.code === "KeyP")) e.stopPropagation();
+      });
     }
   }
 
@@ -514,21 +593,29 @@ function deezerPitchChanger(WORKLET_SOURCE, VERSION) {
 
     if (mode === "pitch") {
       Object.assign(ui.slider, { min: SEMITONES_MIN, max: SEMITONES_MAX, step: 0.01 });
-      ui.big.textContent = `${formatSemitones(value)} semitones`;
+      ui.prefix.textContent = "";
+      ui.unit.textContent = " semitones";
       const cents = Math.round(value * 100);
       ui.sub.textContent = `${cents > 0 ? "+" : cents < 0 ? "−" : ""}${Math.abs(cents)} cents · same speed`;
       ui.minus.textContent = "−1 st";
       ui.plus.textContent = "+1 st";
     } else {
       Object.assign(ui.slider, { min: SPEED_MIN, max: SPEED_MAX, step: 0.01 });
-      ui.big.textContent = `${formatRatio(value)}`;
+      ui.prefix.textContent = "×";
+      ui.unit.textContent = "";
       ui.sub.textContent = mode === "vinyl"
-        ? `${Math.round(value * 100)} % · ${formatSemitones(12 * Math.log2(value))} semitones`
+        ? `${Math.round(value * 100)} % · ${formatSemitones(12 * Math.log2(value), 2)} semitones`
         : `${Math.round(value * 100)} % · same pitch`;
       ui.minus.textContent = mode === "vinyl" ? "−1 st" : "−5 %";
       ui.plus.textContent = mode === "vinyl" ? "+1 st" : "+5 %";
     }
     ui.slider.value = String(value);
+    // Don't overwrite what the user is typing.
+    if (!ui.num.classList.contains("typing")) {
+      ui.num.value = valueText();
+      ui.num.classList.remove("invalid");
+      fitInput();
+    }
 
     ui.chips.innerHTML = PRESETS[mode]
       .map((p) => `<button data-value="${p.value}" class="${Math.abs(p.value - value) < 0.006 ? "sel" : ""}">${p.label}</button>`)

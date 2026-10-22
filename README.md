@@ -23,7 +23,8 @@ In Deezer, a **Pitch** button appears at the bottom right (drag it to move it):
 
 - **click** or **Alt+P**: open or close the panel;
 - **Alt+Shift+P**: turn the effect on or off;
-- **mouse wheel on the slider**: fine adjustment; **double-click**: back to the neutral value.
+- **mouse wheel on the slider**: fine adjustment; **double-click**: back to the neutral value;
+- **click the value** to type an exact one (`1.024`, `-2.3`, `110 %`, or `3 st` in Speed + pitch mode, up to 3 decimals), then **Enter** to apply or **Esc** to cancel. **↑ / ↓** in the field step the value (**Shift** for fine steps).
 
 Settings are remembered between sessions.
 
