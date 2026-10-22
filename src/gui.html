@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#121418">
+<link rel="icon" href="/icon.svg">
+<meta name="color-scheme" content="dark">
+<title>Deezer Pitch Changer</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #121418;
+    --surface: #1a1d22;
+    --surface-2: #22262c;
+    --surface-3: #2a2f36;
+    --line: #262a31;
+    --line-strong: #353a43;
+    --ink: #eceef2;
+    --muted: #9299a6;
+    --faint: #6b7280;
+    --blue: #3b82f6;
+    --blue-hover: #2f74e6;
+    --blue-ink: #7fb0ff;
+    --green: #3fb96b;
+    --amber: #e3a03c;
+    --red: #f0625a;
+    --red-hover: #dc5048;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+  svg { display: block; flex: none; }
+  [hidden] { display: none !important; }
+
+  main { max-width: 560px; margin: 0 auto; padding: 22px 22px 18px; display: grid; gap: 14px; }
+
+  header { display: flex; align-items: center; gap: 13px; margin-bottom: 4px; }
+  .app-icon { width: 46px; height: 46px; display: block; flex: none; margin: -2px; }
+  h1 { font: 600 19px/1.2 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; margin: 0; letter-spacing: -.005em; }
+  header p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+
+  .hero { padding: 18px; }
+  .hero-top { display: flex; gap: 14px; align-items: flex-start; }
+  .tile { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--surface-2); color: var(--muted); }
+  .tone-ok .tile { background: rgba(63, 185, 107, .13); color: var(--green); }
+  .tone-warn .tile { background: rgba(227, 160, 60, .13); color: var(--amber); }
+  .tone-err .tile { background: rgba(240, 98, 90, .13); color: var(--red); }
+  .tone-info .tile { background: rgba(59, 130, 246, .14); color: var(--blue-ink); }
+  .hero h2 { margin: 1px 0 3px; font: 600 17px/1.3 "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+  .hero p { margin: 0; color: var(--muted); font-size: 13.5px; }
+  .hero-actions { display: flex; gap: 8px; margin-top: 16px; padding-left: 58px; }
+
+  .rows { overflow: hidden; }
+  .row { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 12px; padding: 11px 16px; min-height: 58px; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row-icon { color: var(--faint); position: relative; display: grid; place-items: center; }
+  .row-icon.has-dot::after {
+    content: ""; position: absolute; top: -3px; right: -3px; width: 8px; height: 8px; border-radius: 50%;
+    background: var(--blue); border: 2px solid var(--surface);
+  }
+  .row-label { font-weight: 500; }
+  .row-sub { color: var(--muted); font-size: 12.5px; margin-top: 1px; }
+  .row-sub.ok { color: var(--green); }
+  .row-sub.warn { color: var(--amber); }
+  .row-sub.err { color: var(--red); }
+  .row-end { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+  .row.highlight .row-label { color: var(--blue-ink); }
+
+  .tip { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--muted); font-size: 13px; }
+  .tip .row-icon { width: 20px; }
+  .tip-lines { display: grid; gap: 8px; flex: 1; }
+  .tip-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .tip b { color: var(--ink); font-weight: 600; }
+  kbd {
+    font: 600 11.5px/1 "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--surface-2);
+    border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; padding: 3px 6px; margin: 0 1px;
+  }
+
+  footer { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+  footer .spacer { flex: 1; }
+  .version { color: var(--faint); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 14px;
+    font: 500 13.5px/1 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: 8px; cursor: pointer; white-space: nowrap;
+    transition: background-color .12s, border-color .12s, color .12s;
+  }
+  .btn:hover { background: var(--surface-3); }
+  .btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .btn.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .btn.primary:hover { background: var(--blue-hover); border-color: var(--blue-hover); }
+  .btn.danger { background: var(--red); border-color: var(--red); color: #fff; }
+  .btn.danger:hover { background: var(--red-hover); border-color: var(--red-hover); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); padding: 0 10px; }
+  .btn.ghost:hover { background: var(--surface-2); color: var(--ink); }
+  .btn.ghost.risky:hover { background: rgba(240, 98, 90, .1); color: var(--red); }
+  .btn.small { height: 30px; padding: 0 12px; font-size: 13px; }
+  .btn:disabled { opacity: .45; cursor: default; pointer-events: none; }
+  .btn.loading { opacity: 1; }
+  .btn-icon { display: grid; place-items: center; }
+  .btn.loading .btn-icon svg { display: none; }
+  .btn.loading .btn-icon::before, .spinner {
+    content: ""; display: block; width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid currentColor; border-right-color: transparent; animation: spin .7s linear infinite;
+  }
+
+  .skeleton { border-radius: 6px; background: var(--surface-2); animation: pulse 1.4s ease-in-out infinite; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 18px; transform: translate(-50%, 8px); opacity: 0; pointer-events: none;
+    display: flex; align-items: center; gap: 9px; max-width: calc(100% - 44px); padding: 10px 14px;
+    background: var(--surface-3); border: 1px solid var(--line-strong); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .45); font-size: 13px; transition: opacity .18s, transform .18s;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .toast .row-icon { color: var(--green); }
+  .toast.error .row-icon { color: var(--red); }
+
+  dialog {
+    width: min(380px, calc(100% - 40px)); padding: 20px; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--line-strong); border-radius: 14px; box-shadow: 0 20px 60px rgba(0, 0, 0, .6);
+  }
+  dialog::backdrop { background: rgba(5, 6, 8, .6); }
+  dialog .hero-top { gap: 14px; }
+  dialog h3 { margin: 2px 0 4px; font-size: 16px; font-weight: 600; }
+  dialog p { margin: 0; color: var(--muted); font-size: 13.5px; }
+  dialog .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
+  .fade { animation: fade .2s ease-out; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 50% { opacity: .55; } }
+  @keyframes fade { from { opacity: 0; transform: translateY(3px); } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <img class="app-icon" src="/icon.svg" alt="">
+    <div>
+      <h1>Deezer Pitch Changer</h1>
+      <p>Speed and pitch controls for the Deezer desktop app</p>
+    </div>
+  </header>
+
+  <section class="card hero" id="hero"></section>
+  <section class="card rows" id="details" hidden></section>
+  <section class="card tip" id="tip" hidden></section>
+
+  <footer>
+    <div id="footer-actions"></div>
+    <span class="spacer"></span>
+    <span class="version" id="version"></span>
+  </footer>
+</main>
+
+<div class="toast" id="toast" role="status"></div>
+
+<dialog id="dialog">
+  <div class="hero-top" id="dialog-body"></div>
+  <div class="dialog-actions">
+    <button class="btn" id="dialog-cancel">Cancel</button>
+    <button class="btn primary" id="dialog-ok"></button>
+  </div>
+</dialog>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  const token = params.get("t");
+  const $ = (id) => document.getElementById(id);
+
+  const icons = {
+    check: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+    x: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+    play: '<path d="M7 4.5v15l12-7.5z"/>',
+    refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+    rotate: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>',
+    trash: '<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    plug: '<path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/>',
+    music: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+    bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+    keyboard: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/>',
+    close: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  };
+
+  const icon = (name, size = 16) =>
+    `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[name]}</svg>`;
+
+  const escape = (text) => String(text).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+  const button = (action, label, name, kind = "") =>
+    `<button class="btn ${kind}" data-action="${action}"><span class="btn-icon">${icon(name, 15)}</span><span>${escape(label)}</span></button>`;
+
+  let current = null;
+  let loadError = null;
+  let update = { state: "checking" };
+  let uninstalled = null;
+  let busy = false;
+  let pending = null;
+  let restarting = false;
+  let lastRefresh = 0;
+  let toastTimer = null;
+
+  new EventSource(`/events?t=${token}`);
+
+  async function api(method, path, body) {
+    const res = await fetch(path, {
+      method,
+      headers: { "X-Token": token, "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json();
+    if (!res.ok) throw Object.assign(new Error(data.error), { code: data.code });
+    return data;
+  }
+
+  const found = () => !!(current && (current.web || current.store));
+  const needsPatch = () => !!(current && current.installed && current.web && !current.web.current);
+
+  function hero() {
+    if (uninstalled) {
+      return {
+        tone: "ok", icon: "check", title: "Pitch changer removed",
+        text: `Deezer is back to its original state.${uninstalled.storeOpen ? " Restart Deezer to remove it from the open window." : ""} You can close this window.`,
+        actions: [button("close", "Close", "close", "primary")],
+      };
+    }
+    if (loadError) {
+      return { tone: "err", icon: "alert", title: "Couldn't read the status", text: loadError, actions: [button("refresh", "Try again", "refresh", "primary")] };
+    }
+    const s = current;
+    if (!found()) {
+      return {
+        tone: "err", icon: "x", title: "Deezer isn't installed",
+        text: "Install the Deezer desktop app from deezer.com/download or the Microsoft Store, then check again.",
+        actions: [button("refresh", "Check again", "refresh", "primary")],
+      };
+    }
+    if (!s.installed) {
+      return {
+        tone: "info", icon: "download", title: "Not installed",
+        text: "Adds a Pitch panel to Deezer to change the speed and the key of the music. Nothing runs in the background."
+          + (s.web && s.web.patched ? " This Deezer still has the plugin of a previous install." : ""),
+        actions: [button("install", "Install", "download", "primary")],
+      };
+    }
+    if (needsPatch()) {
+      return {
+        tone: "warn", icon: "alert", title: "Needs to be reapplied",
+        text: s.web.patched ? "This Deezer has the plugin of an older version." : `Deezer was updated to ${s.web.version}, which removed the plugin.`,
+        actions: [button("install", "Reapply", "rotate", "primary"), button("launch", "Open Deezer", "play")],
+      };
+    }
+    return {
+      tone: "ok", icon: "check", title: "Active",
+      text: s.web
+        ? `Deezer ${s.web.version} has the pitch changer.`
+        : "Open Deezer from here or with the “Deezer with Pitch Changer” shortcut: the pitch changer is added when it starts.",
+      actions: [button("launch", "Open Deezer", "play", "primary")],
+    };
+  }
+
+  function renderHero() {
+    const el = $("hero");
+    if (!current && !loadError && !uninstalled) {
+      el.className = "card hero";
+      el.innerHTML = '<div class="hero-top"><div class="tile skeleton"></div><div style="flex:1;display:grid;gap:8px;padding-top:4px">'
+        + '<div class="skeleton" style="height:16px;width:45%"></div><div class="skeleton" style="height:12px;width:85%"></div></div></div>';
+      return;
+    }
+    const h = hero();
+    el.className = `card hero tone-${h.tone}`;
+    el.innerHTML = `<div class="hero-top fade"><div class="tile">${icon(h.icon, 22)}</div><div><h2>${escape(h.title)}</h2><p>${escape(h.text)}</p></div></div>`
+      + `<div class="hero-actions">${h.actions.join("")}</div>`;
+  }
+
+  function row(iconName, label, sub, subTone, end, extra = "") {
+    return `<div class="row ${extra.includes("highlight") ? "highlight" : ""}"><span class="row-icon ${extra.includes("dot") ? "has-dot" : ""}">${icon(iconName)}</span>`
+      + `<div><div class="row-label">${escape(label)}</div>${sub ? `<div class="row-sub ${subTone}">${escape(sub)}</div>` : ""}</div>`
+      + `<div class="row-end">${end}</div></div>`;
+  }
+
+  function updateRow() {
+    if (update.state === "checking") {
+      return row("refresh", "Updates", "Checking for a new version…", "", '<span class="spinner"></span>');
+    }
+    if (update.state === "error") {
+      return row("refresh", "Updates", "Couldn't reach GitHub", "err", button("check", "Try again", "refresh", "small"));
+    }
+    if (update.available) {
+      return row("refresh", `Version ${update.latest} is available`, `You have version ${update.current}`, "",
+        button("update", "Update", "download", "primary small"), "highlight dot");
+    }
+    const time = update.checkedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return row("refresh", "Up to date", `Checked at ${time}`, "", button("check", "Check", "refresh", "small"));
+  }
+
+  function renderDetails() {
+    const s = current;
+    const el = $("details");
+    el.hidden = !s || !!uninstalled || !!loadError;
+    if (el.hidden) return;
+    const rows = [];
+    rows.push(s.installed
+      ? row("plug", "Pitch changer", "Installed for your Windows account", "", escape(`v${s.installedVersion || s.version}`))
+      : row("plug", "Pitch changer", "Not installed", "", "—"));
+    if (s.web) {
+      const w = s.web;
+      const [sub, tone] = !s.installed
+        ? [w.patched ? "Patched by a previous install" : "Desktop app", ""]
+        : w.current ? ["Plugin active", "ok"] : w.patched ? ["Older plugin", "warn"] : ["Plugin missing", "warn"];
+      rows.push(row("music", "Deezer", sub, tone, escape(w.version)));
+    }
+    if (s.store) {
+      rows.push(row("bag", "Deezer · Microsoft Store", s.installed ? "Added each time it is opened with the shortcut" : "Microsoft Store app", "", escape(s.store.version)));
+    }
+    if (!s.web && !s.store) rows.push(row("music", "Deezer", "Not found", "err", "—"));
+    rows.push(updateRow());
+    el.innerHTML = rows.join("");
+  }
+
+  function renderTip() {
+    const show = !!current && current.installed && found() && !uninstalled;
+    $("tip").hidden = !show;
+    if (!show) return;
+    $("tip").innerHTML = `<span class="row-icon">${icon("keyboard")}</span><div class="tip-lines">`
+      + "<div class=\"tip-line\"><span>Open the <b>Pitch</b> panel in Deezer</span><span><kbd>Alt</kbd><kbd>P</kbd></span></div>"
+      + "<div class=\"tip-line\"><span>Turn the effect on or off</span><span><kbd>Alt</kbd><kbd>Shift</kbd><kbd>P</kbd></span></div></div>";
+  }
+
+  function renderFooter() {
+    const s = current;
+    const actions = [];
+    if (s && !uninstalled && found()) {
+      if (s.installed && !needsPatch()) actions.push(button("install", "Reinstall", "rotate", "ghost"));
+      if (s.installed || (s.web && s.web.patched)) actions.push(button("uninstall", "Uninstall", "trash", "ghost risky"));
+    }
+    $("footer-actions").innerHTML = actions.join("");
+    $("version").textContent = s ? `Version ${s.version}` : "";
+  }
+
+  function applyBusy() {
+    for (const el of document.querySelectorAll("main [data-action]")) {
+      el.disabled = (busy || restarting) && el.dataset.action !== "close";
+      el.classList.toggle("loading", el.dataset.action === pending);
+    }
+  }
+
+  function render() {
+    renderHero();
+    renderDetails();
+    renderTip();
+    renderFooter();
+    applyBusy();
+  }
+
+  function toast(text, tone = "ok") {
+    const el = $("toast");
+    el.className = `toast show${tone === "error" ? " error" : ""}`;
+    el.innerHTML = `<span class="row-icon">${icon(tone === "error" ? "alert" : "check")}</span><span>${escape(text)}</span>`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = el.className.replace(" show", ""); }, tone === "error" ? 8000 : 4000);
+  }
+
+  function ask({ title, text, ok, tone = "warn", iconName = "alert", kind = "primary" }) {
+    const dialog = $("dialog");
+    $("dialog-body").className = `hero-top tone-${tone}`;
+    $("dialog-body").innerHTML = `<div class="tile">${icon(iconName, 22)}</div><div><h3>${escape(title)}</h3><p>${escape(text)}</p></div>`;
+    $("dialog-ok").textContent = ok;
+    $("dialog-ok").className = `btn ${kind}`;
+    dialog.showModal();
+    return new Promise((resolve) => {
+      const done = (answer) => {
+        dialog.close();
+        $("dialog-ok").onclick = $("dialog-cancel").onclick = dialog.oncancel = null;
+        resolve(answer);
+      };
+      $("dialog-ok").onclick = () => done(true);
+      $("dialog-cancel").onclick = () => done(false);
+      dialog.oncancel = () => done(false);
+    });
+  }
+
+  async function refresh() {
+    try {
+      current = await api("GET", "/api/state");
+      loadError = null;
+    } catch (err) {
+      loadError = err.message;
+    }
+    lastRefresh = Date.now();
+    render();
+  }
+
+  async function checkUpdate() {
+    update = { state: "checking" };
+    render();
+    try {
+      update = { state: "done", checkedAt: new Date(), ...(await api("GET", "/api/update")) };
+    } catch {
+      update = { state: "error" };
+    }
+    render();
+  }
+
+  function setBusy(name) {
+    busy = !!name;
+    pending = name;
+    applyBusy();
+  }
+
+  async function run(name, path, done) {
+    if (busy || restarting) return;
+    setBusy(name);
+    try {
+      let result;
+      try {
+        result = await api("POST", path, {});
+      } catch (err) {
+        if (err.code !== "DEEZER_RUNNING") throw err;
+        setBusy(null);
+        const close = await ask({
+          title: "Deezer is open",
+          text: "It has to be closed for a moment. It will be reopened afterwards.",
+          ok: "Close Deezer",
+          iconName: "music",
+        });
+        if (!close) return;
+        setBusy(name);
+        result = await api("POST", path, { closeDeezer: true });
+      }
+      setBusy(null);
+      await done(result);
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setBusy(null);
+      render();
+    }
+  }
+
+  const actions = {
+    install: () => {
+      const message = !current.installed ? "Installed. Open Deezer to try it." : needsPatch() ? "Plugin reapplied." : "Reinstalled.";
+      return run("install", "/api/install", async () => {
+        await refresh();
+        toast(message);
+      });
+    },
+    launch: () => run("launch", "/api/launch", async () => {
+      toast("Deezer is opening.");
+      setTimeout(() => refresh(), 2500);
+    }),
+    uninstall: async () => {
+      if (busy) return;
+      const confirmed = await ask({
+        title: "Uninstall the pitch changer?",
+        text: "Deezer will be restored to its original state and the Start menu shortcuts removed.",
+        ok: "Uninstall",
+        tone: "err",
+        iconName: "trash",
+        kind: "danger",
+      });
+      if (confirmed) await run("uninstall", "/api/uninstall", (result) => { uninstalled = result; });
+    },
+    update: () => run("update", "/api/update", () => {
+      restarting = true;
+      toast(`Version ${update.latest} installed. Restarting…`);
+      setTimeout(() => window.close(), 900);
+    }),
+    check: checkUpdate,
+    refresh: async () => {
+      current = null;
+      loadError = null;
+      render();
+      await refresh();
+    },
+    close: () => window.close(),
+  };
+
+  document.addEventListener("click", (event) => {
+    const target = event.target.closest("[data-action]");
+    if (target && !target.disabled) actions[target.dataset.action]();
+  });
+
+  window.addEventListener("focus", () => {
+    if (!busy && !restarting && current && !uninstalled && Date.now() - lastRefresh > 10000) refresh();
+  });
+
+  (async () => {
+    render();
+    await refresh();
+    if (params.get("notice") === "updated" && current) toast(`Updated to version ${current.version}.`);
+    checkUpdate();
+    if (params.get("dialog") === "uninstall" && current && (current.installed || (current.web && current.web.patched))) actions.uninstall();
+  })();
+</script>
+</body>
+</html>

@@ -1,5 +1,5 @@
-// Installs the executable itself: its files in %LOCALAPPDATA%, a hidden copy started at logon
-// (background.js) and an entry in Windows' installed apps to uninstall it.
+// Installs the executable itself: its file in %LOCALAPPDATA%, Start menu shortcuts and an entry in
+// Windows' installed apps to uninstall it.
 const { execFileSync, spawn } = require("child_process");
 const fs = require("fs");
 const net = require("net");
@@ -10,14 +10,18 @@ const { author } = require("../package.json");
 
 const DIR = path.join(process.env.LOCALAPPDATA || os.homedir(), "Programs", "deezer-pitch-changer");
 const EXE = path.join(DIR, "DeezerPitchChanger.exe");
-const BACKGROUND_EXE = path.join(DIR, "DeezerPitchChanger-background.exe");
 const CONFIG = path.join(DIR, "config.json");
 const LOG = path.join(DIR, "log.txt");
-const PIPE = "\\\\.\\pipe\\deezer-pitch-changer";
 
+const LEGACY_BACKGROUND_EXE = path.join(DIR, "DeezerPitchChanger-background.exe");
+const LEGACY_PIPE = "\\\\.\\pipe\\deezer-pitch-changer";
 const RUN_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 const RUN_VALUE = "DeezerPitchChanger";
 const UNINSTALL_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\DeezerPitchChanger";
+
+const START_MENU = path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "Microsoft", "Windows", "Start Menu", "Programs");
+const APP_SHORTCUT = path.join(START_MENU, "Deezer Pitch Changer.lnk");
+const LAUNCHER_SHORTCUT = path.join(START_MENU, "Deezer with Pitch Changer.lnk");
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const samePath = (a, b) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
@@ -45,17 +49,7 @@ function writeConfig(patch) {
   fs.writeFileSync(CONFIG, JSON.stringify({ ...readConfig(), ...patch }, null, 2));
 }
 
-// ---------------------------------------------------------------- executables
-
-// The background copy is the same program marked as a GUI app, so Windows opens no console for it.
-function withGuiSubsystem(exe) {
-  const buf = Buffer.from(exe);
-  const pe = buf.readUInt32LE(0x3c);
-  if (buf.toString("latin1", pe, pe + 4) !== "PE\0\0") throw new Error("not a Windows executable");
-  // PE signature (4) + COFF header (20), then the optional header where Subsystem is at offset 68.
-  buf.writeUInt16LE(2, pe + 24 + 68); // IMAGE_SUBSYSTEM_WINDOWS_GUI
-  return buf;
-}
+// ---------------------------------------------------------------- executable
 
 // A running executable can be renamed but not overwritten: move it aside, removed on next start.
 function replaceFile(target, buffer) {
@@ -70,16 +64,19 @@ function replaceFile(target, buffer) {
 }
 
 // Written from a buffer rather than copied, which also drops the "downloaded from the internet"
-// mark, so Windows doesn't show a security warning at each logon.
-function writeExecutables(exe) {
+// mark, so Windows doesn't show a security warning each time it is opened.
+function writeExecutable(exe) {
   fs.mkdirSync(DIR, { recursive: true });
   replaceFile(EXE, exe);
-  replaceFile(BACKGROUND_EXE, withGuiSubsystem(exe));
+}
+
+function startInstalled(args) {
+  spawn(EXE, args, { detached: true, stdio: "ignore" }).unref();
 }
 
 function cleanupOldFiles() {
   for (const name of fs.existsSync(DIR) ? fs.readdirSync(DIR) : []) {
-    if (!/\.(old|new)$/.test(name)) continue;
+    if (!/\.(old|new)$/.test(name) && name !== path.basename(LEGACY_BACKGROUND_EXE)) continue;
     try {
       fs.rmSync(path.join(DIR, name), { force: true });
     } catch {
@@ -95,7 +92,6 @@ function reg(args) {
 }
 
 function register() {
-  reg(["add", RUN_KEY, "/v", RUN_VALUE, "/t", "REG_SZ", "/d", `"${BACKGROUND_EXE}" --background`, "/f"]);
   const values = {
     DisplayName: "Deezer Pitch Changer",
     DisplayVersion: info.version,
@@ -108,7 +104,7 @@ function register() {
   };
   for (const [name, data] of Object.entries(values)) reg(["add", UNINSTALL_KEY, "/v", name, "/t", "REG_SZ", "/d", data, "/f"]);
   for (const name of ["NoModify", "NoRepair"]) reg(["add", UNINSTALL_KEY, "/v", name, "/t", "REG_DWORD", "/d", "1", "/f"]);
-  const sizeKb = Math.round((fs.statSync(EXE).size * 2) / 1024);
+  const sizeKb = Math.round(fs.statSync(EXE).size / 1024);
   reg(["add", UNINSTALL_KEY, "/v", "EstimatedSize", "/t", "REG_DWORD", "/d", String(sizeKb), "/f"]);
 }
 
@@ -122,19 +118,46 @@ function unregister() {
   }
 }
 
-// ---------------------------------------------------------------- background process
+// ---------------------------------------------------------------- shortcuts
 
-function startBackground() {
-  spawn(BACKGROUND_EXE, ["--background"], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+function createShortcuts(deezerExe) {
+  const quote = (text) => `'${text.replace(/'/g, "''")}'`;
+  const shortcut = (file, args, icon, description) => [
+    `$s = $shell.CreateShortcut(${quote(file)})`,
+    `$s.TargetPath = ${quote(EXE)}`,
+    `$s.Arguments = ${quote(args)}`,
+    `$s.WorkingDirectory = ${quote(DIR)}`,
+    `$s.IconLocation = ${quote(`${icon},0`)}`,
+    `$s.Description = ${quote(description)}`,
+    "$s.Save()",
+  ];
+  const script = [
+    "$shell = New-Object -ComObject WScript.Shell",
+    ...shortcut(APP_SHORTCUT, "", EXE, "Install, update or remove the Deezer pitch changer"),
+    ...shortcut(LAUNCHER_SHORTCUT, "--launch", deezerExe || EXE, "Opens Deezer with the pitch changer"),
+  ].join("\n");
+  execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { stdio: "ignore", windowsHide: true });
 }
 
-// Asks the background process to exit (through its pipe), then makes sure it is gone.
-async function stopBackground() {
+function removeShortcuts() {
+  for (const file of [APP_SHORTCUT, LAUNCHER_SHORTCUT]) fs.rmSync(file, { force: true });
+}
+
+// ---------------------------------------------------------------- versions up to 1.1
+
+async function removeLegacyBackground() {
+  if (!fs.existsSync(LEGACY_BACKGROUND_EXE)) return;
+  try {
+    reg(["delete", RUN_KEY, "/v", RUN_VALUE, "/f"]);
+  } catch {
+    // Already removed.
+  }
+  if (samePath(process.execPath, LEGACY_BACKGROUND_EXE)) return;
   await new Promise((resolve) => {
-    const socket = net.connect(PIPE);
+    const socket = net.connect(LEGACY_PIPE);
     const timer = setTimeout(() => socket.destroy(), 10000);
     socket.on("connect", () => socket.write("quit\n"));
-    socket.on("error", () => {}); // not running: "close" follows
+    socket.on("error", () => {});
     socket.on("close", () => {
       clearTimeout(timer);
       resolve();
@@ -142,11 +165,12 @@ async function stopBackground() {
   });
   await sleep(300);
   try {
-    execFileSync("taskkill", ["/F", "/IM", path.basename(BACKGROUND_EXE)], { stdio: "ignore", windowsHide: true });
+    execFileSync("taskkill", ["/F", "/IM", path.basename(LEGACY_BACKGROUND_EXE)], { stdio: "ignore", windowsHide: true });
     await sleep(300);
   } catch {
     // Not running.
   }
+  cleanupOldFiles();
 }
 
 function removeFiles() {
@@ -170,16 +194,17 @@ module.exports = {
   DIR,
   EXE,
   LOG,
-  PIPE,
   isInstalled,
+  runningInstalledCopy,
   readConfig,
   writeConfig,
-  withGuiSubsystem,
-  writeExecutables,
+  writeExecutable,
+  startInstalled,
   cleanupOldFiles,
   register,
   unregister,
-  startBackground,
-  stopBackground,
+  createShortcuts,
+  removeShortcuts,
+  removeLegacyBackground,
   removeFiles,
 };

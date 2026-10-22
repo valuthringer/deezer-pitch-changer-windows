@@ -1,6 +1,6 @@
 {
   "name": "deezer-pitch-changer",
-  "version": "1.1.0",
+  "version": "1.2.1",
   "description": "Adds speed and pitch controls to the Deezer Desktop app for Windows.",
   "private": true,
   "license": "MIT",

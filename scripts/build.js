@@ -47,6 +47,14 @@ function bundle(entry) {
   ].join("\n");
 }
 
+function withGuiSubsystem(exe) {
+  const buf = Buffer.from(exe);
+  const pe = buf.readUInt32LE(0x3c);
+  if (buf.toString("latin1", pe, pe + 4) !== "PE\0\0") throw new Error("not a Windows executable");
+  buf.writeUInt16LE(2, pe + 24 + 68);
+  return buf;
+}
+
 // The copied node.exe carries Node's signature, which no longer matches once modified.
 function removeSignature(exe) {
   const kits = path.join(process.env["ProgramFiles(x86)"] || "", "Windows Kits", "10", "bin");
@@ -78,6 +86,8 @@ async function main() {
     assets: {
       "pitch-changer.js": path.join(ROOT, "src", "inject", "pitch-changer.js"),
       "pitch-worklet.js": path.join(ROOT, "src", "inject", "pitch-worklet.js"),
+      "gui.html": path.join(ROOT, "src", "gui.html"),
+      "icon.svg": path.join(ROOT, "assets", "icon.svg"),
     },
   }, null, 2));
   execFileSync(process.execPath, ["--experimental-sea-config", configPath], { stdio: "inherit" });
@@ -86,6 +96,7 @@ async function main() {
   removeSignature(EXE);
   const fileVersion = `${version}.0`;
   await require("rcedit")(EXE, {
+    icon: path.join(ROOT, "assets", "icon.ico"),
     "file-version": fileVersion,
     "product-version": fileVersion,
     "version-string": {
@@ -99,6 +110,7 @@ async function main() {
     },
   });
   await require("postject").inject(EXE, "NODE_SEA_BLOB", fs.readFileSync(blobPath), { sentinelFuse: SEA_FUSE });
+  fs.writeFileSync(EXE, withGuiSubsystem(fs.readFileSync(EXE)));
 
   const size = (fs.statSync(EXE).size / 1024 / 1024).toFixed(1);
   console.log(`Built ${path.relative(ROOT, EXE)} (v${version}, ${size} MB)`);
@@ -111,4 +123,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { bundle };
+module.exports = { bundle, withGuiSubsystem };

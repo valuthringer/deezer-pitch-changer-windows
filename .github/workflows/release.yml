@@ -1,6 +1,6 @@
 # Builds and tests DeezerPitchChanger.exe on every push to main. When the version in package.json
-# has no release yet, publishes it as release v<version>: installed copies check the latest
-# release every few hours and update themselves. Bump the version to ship an update.
+# has no release yet, publishes it as release v<version>: installed copies show it when their
+# window is opened, and install it on request. Bump the version to ship an update.
 name: Release
 
 on:

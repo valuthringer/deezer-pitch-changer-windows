@@ -1,3 +1,5 @@
+<img src="assets/icon.svg" width="72" alt="">
+
 # Deezer Pitch Changer
 
 An unofficial JavaScript plugin that lets you adjust the **speed** and **pitch** of the audio during playback in the **Deezer Desktop app for Windows**.
@@ -15,17 +17,16 @@ Three modes:
 ## Installation
 
 1. Download **`DeezerPitchChanger.exe`** from the [latest release](https://github.com/valuthringer/deezer-pitch-changer-windows/releases/latest).
-2. Double-click it and confirm. If Deezer is open, it offers to close it, then relaunches it once the patch is applied.
+2. Double-click it: a small window opens. Click **Install**. If Deezer is open, it offers to close it, then reopens it once the patch is applied.
 
 > Works with Deezer from [deezer.com/download](https://www.deezer.com/download) and with the **Microsoft Store** version.
 
 > The executable isn't signed: Windows SmartScreen may show "Windows protected your PC". Click **More info** → **Run anyway**.
 
-It installs itself for your Windows account (in `%LOCALAPPDATA%\Programs\deezer-pitch-changer`, no administrator rights needed) and then runs hidden in the background:
+It installs itself for your Windows account (in `%LOCALAPPDATA%\Programs\deezer-pitch-changer`, no administrator rights needed) and adds two entries to the Start menu. **Nothing runs in the background**:
 
-- **after a Deezer update** (which removes the patch), it patches Deezer again on its own;
-- with the **Microsoft Store** version, whose files can't be modified, it adds the pitch changer each time Deezer starts (a few seconds after it opens);
-- **when a new version is published** here, it updates itself (checked at logon, then every 6 hours) and applies it the next time Deezer is closed.
+- **Deezer Pitch Changer** opens the window: install, reapply, uninstall, open Deezer, and check for updates. It checks GitHub once when it opens; a dot shows when a new version is available, and **Update** installs it. The program quits when the window is closed.
+- **Deezer with Pitch Changer** opens Deezer. Use it **after a Deezer update** (which removes the patch): it patches Deezer again before starting it. With the **Microsoft Store** version, whose files can't be modified, it is required: it adds the pitch changer each time Deezer starts (a few seconds after it opens).
 
 In Deezer, a **Pitch** button appears at the bottom right (drag it to move it):
 
@@ -38,21 +39,23 @@ Settings are remembered between sessions.
 
 ## Uninstall
 
-**Settings** → **Apps** → **Installed apps** → **Deezer Pitch Changer** → **Uninstall** (or run `DeezerPitchChanger.exe` again and choose **U**). The original Deezer is restored.
+**Uninstall** in the window, or **Settings** → **Apps** → **Installed apps** → **Deezer Pitch Changer** → **Uninstall**. The original Deezer is restored.
 
 ## Command line
 
+The executable has no console. For scripts, these commands run without a window:
+
 ```
-DeezerPitchChanger.exe install     [--path <Deezer folder>] [--yes] [--no-launch]
-DeezerPitchChanger.exe uninstall   [--path <Deezer folder>] [--yes] [--no-launch]
-DeezerPitchChanger.exe status
+DeezerPitchChanger.exe install --yes     [--path <Deezer folder>] [--no-launch]
+DeezerPitchChanger.exe uninstall --yes   [--no-launch]
+DeezerPitchChanger.exe --launch
 ```
 
-The folder is detected automatically (`%LOCALAPPDATA%\Programs\deezer-desktop` by default). A custom `--path` is remembered for the automatic re-patching.
+`--yes` closes Deezer if it is open; it is reopened at the end unless `--no-launch` is given. The folder is detected automatically (`%LOCALAPPDATA%\Programs\deezer-desktop` by default). A custom `--path` is remembered. Errors go to the log (see [Development](#development)).
 
 ### From the sources
 
-With [Node.js](https://nodejs.org) 18 or newer, `Install.cmd` / `Uninstall.cmd` (or `node src/cli.js install | uninstall | status`) only patch / restore Deezer, without the background updates: run `Install.cmd` again after each Deezer update.
+With [Node.js](https://nodejs.org) 18 or newer, `Install.cmd` / `Uninstall.cmd` (or `node src/cli.js install | uninstall | status`) only patch / restore Deezer, in a console: run `Install.cmd` again after each Deezer update.
 
 ## How it works
 
@@ -65,9 +68,9 @@ The Deezer app is an Electron shell that displays the `deezer.com` web player.
   - sets `playbackRate` and `preservesPitch`;
   - in Pitch mode, routes the audio through **`src/inject/pitch-worklet.js`**;
   - renders the panel (inside a Shadow DOM, so Deezer's styles are untouched).
-- **`src/app.js`** is the entry point of the executable, a [Node.js single executable application](https://nodejs.org/api/single-executable-applications.html) built by **`scripts/build.js`** (no runtime dependencies). **`src/setup.js`** installs it: a copy marked as a GUI app (so no console window) starts at logon from the `HKCU\…\Run` key, and an entry is added to Windows' installed apps.
-- **`src/background.js`** is that hidden copy. It watches `app.asar`: once a Deezer update has replaced it, it patches it again when Deezer is closed, or restarts Deezer patched if its updater has just relaunched it. **`src/updater.js`** fetches newer versions from the GitHub releases (checked against their size and SHA-256).
-- **`src/store.js`** handles the Microsoft Store version (an MSIX package, read-only). When Deezer starts (seen through its data folder), the background process asks its main process to open the Node.js inspector (`process._debugProcess`), registers the same snippet as a preload script of Deezer's sessions, reloads the page if it was already loaded, and closes the inspector again. Nothing is written to Deezer's files.
+- **`src/app.js`** is the entry point of the executable, a [Node.js single executable application](https://nodejs.org/api/single-executable-applications.html) built by **`scripts/build.js`** (no runtime dependencies). It is marked as a GUI app, so no console window opens. **`src/setup.js`** installs it, with its Start menu shortcuts and an entry in Windows' installed apps.
+- **`src/gui.js`** is the window: a local server on `127.0.0.1` (random port, requests checked against a random token) showing **`src/gui.html`** in an Edge app window (Chrome if Edge is missing, otherwise the default browser). The program exits a few seconds after the window is closed. **`src/manager.js`** holds what the window and the shortcuts do (install, uninstall, open Deezer, update). **`src/updater.js`** fetches newer versions from the GitHub releases (checked against their size and SHA-256).
+- **`src/store.js`** handles the Microsoft Store version (an MSIX package, read-only). When Deezer is opened with the shortcut, the program waits for its main process, asks it to open the Node.js inspector (`process._debugProcess`), registers the same snippet as a preload script of Deezer's sessions, reloads the page if it was already loaded, and closes the inspector again. Nothing is written to Deezer's files.
 - **`.github/workflows/release.yml`** builds and tests the executable on every push to `main`, and publishes it as release `v<version>` when the version in `package.json` has none yet.
 
 ## Publishing an update
@@ -80,7 +83,7 @@ Pushes to `main` that keep the same version are built and tested but not release
 
 ## Limitations
 
-- With the Microsoft Store version, the button appears a few seconds after Deezer opens (the page reloads once), and only while the background process runs. The inspector briefly listens on `127.0.0.1:9229`: if another program uses that port, the pitch changer can't be added (see the log).
+- With the Microsoft Store version, the button appears a few seconds after Deezer opens (the page reloads once), and only when it is opened with the **Deezer with Pitch Changer** shortcut or from the window. The inspector briefly listens on `127.0.0.1:9229`: if another program uses that port, the pitch changer can't be added (see the log).
 - **Pitch** mode has the typical quality of a phase vocoder: very good for small shifts (±3 semitones), more "metallic" beyond that, with slightly softened drum attacks.
 - If Deezer changes the structure of its app, the patch may need to be updated.
 - The executable embeds the Node.js runtime, hence its size (about 80 MB, downloaded again for each update).
@@ -94,7 +97,7 @@ npm run build                  # dist\DeezerPitchChanger.exe (Node.js 22 on Wind
 set DZ_DEVTOOLS=yes && "%LOCALAPPDATA%\Programs\deezer-desktop\Deezer.exe"   # Deezer with DevTools
 ```
 
-The background process logs to `%LOCALAPPDATA%\Programs\deezer-pitch-changer\log.txt`.
+`node src/app.js` opens the window from the sources (installing needs the built executable). The executable logs to `%LOCALAPPDATA%\Programs\deezer-pitch-changer\log.txt`.
 
 In the DevTools console, `window.__deezerPitchChanger` exposes the current state (settings, tracked audio elements, engine).
 
