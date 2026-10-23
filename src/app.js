@@ -1,5 +1,5 @@
-// Entry point of DeezerPitchChanger.exe (built by scripts/build.js).
-// Double-clicked: opens its window to install, update or remove the pitch changer.
+// Entry point of DeezerPitchChanger.exe (built by scripts/build.js), a portable executable.
+// Double-clicked: opens its window to apply or remove the patch, open Deezer and update.
 const gui = require("./gui");
 const manager = require("./manager");
 const { errorMessage } = require("./ui");
@@ -20,15 +20,19 @@ function parseArgs(argv) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  const options = { closeDeezer: true, dir: opts.path, relaunch: opts.launch };
   switch (opts.command) {
     case null:
       return gui.run();
-    case "install":
+    case "patch":
       if (!opts.yes) return gui.run();
-      return manager.install({ closeDeezer: true, dir: opts.path, relaunch: opts.launch });
+      return manager.applyPatch(options);
+    case "unpatch":
+      if (!opts.yes) return gui.run();
+      return manager.removePatch(options);
     case "uninstall":
       if (!opts.yes) return gui.run({ dialog: "uninstall" });
-      return manager.uninstall({ closeDeezer: true, relaunch: opts.launch });
+      return manager.uninstall(options);
     case "launch":
       return manager.launchDeezer();
     case "updated":

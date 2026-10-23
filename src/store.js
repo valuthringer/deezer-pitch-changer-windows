@@ -113,9 +113,20 @@ async function inject(pid) {
   }
 }
 
-// Removes the preload script file written into the Store Deezer's data folder.
-function removePreload(store) {
-  fs.rmSync(path.join(store.userData, PRELOAD_FILE), { force: true });
+const preloadPath = (store) => path.join(store.userData, PRELOAD_FILE);
+
+function hasPreload(store) {
+  return fs.existsSync(preloadPath(store));
 }
 
-module.exports = { hook, inject, removePreload };
+function writePreload(store) {
+  fs.mkdirSync(store.userData, { recursive: true });
+  fs.writeFileSync(preloadPath(store), payload.buildSnippet());
+}
+
+// Removes the preload script file written into the Store Deezer's data folder.
+function removePreload(store) {
+  fs.rmSync(preloadPath(store), { force: true });
+}
+
+module.exports = { hook, inject, hasPreload, writePreload, removePreload };

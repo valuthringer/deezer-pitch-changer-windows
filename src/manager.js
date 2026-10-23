@@ -29,7 +29,7 @@ function failure(code, message) {
 function findWeb(dir) {
   if (dir) return deezer.locate(dir);
   try {
-    return deezer.locate(setup.readConfig().deezerDir || undefined);
+    return deezer.locate(setup.legacyDeezerDir() || undefined);
   } catch {
     return null;
   }
@@ -41,20 +41,18 @@ function findStore(refresh = false) {
   return storeCache;
 }
 
-function installedVersion() {
-  return setup.isInstalled() ? setup.readConfig().registered || null : null;
-}
-
 function state() {
   const web = findWeb();
   const storeApp = findStore(true);
   return {
     version: info.version,
-    installed: setup.isInstalled(),
-    installedVersion: installedVersion(),
-    runningInstalled: setup.runningInstalledCopy(),
+    legacyInstall: setup.legacyInstalled(),
     web: web && { dir: web.dir, ...patcher.status(web.asar), running: deezer.isRunning(web.exe) },
-    store: storeApp && { version: storeApp.version, running: deezer.storeMainProcesses().length > 0 },
+    store: storeApp && {
+      version: storeApp.version,
+      patched: store.hasPreload(storeApp),
+      running: deezer.storeMainProcesses().length > 0,
+    },
   };
 }
 
@@ -79,60 +77,55 @@ async function injectStore(pid) {
   }
 }
 
-function registerInstall(web) {
-  setup.writeConfig({ registered: info.version });
-  setup.register();
-  setup.createShortcuts(web ? web.exe : null);
-}
-
-function patchIfClosed(web) {
-  if (!web || deezer.isRunning(web.exe) || patcher.status(web.asar).current) return;
+function upgradeIfClosed(web) {
+  if (!web || deezer.isRunning(web.exe)) return;
+  const status = patcher.status(web.asar);
+  if (!status.patched || status.current) return;
   try {
     const result = patcher.install(web.asar);
-    log(`patched Deezer ${result.version}`);
+    log(`patch updated in Deezer ${result.version}`);
   } catch (err) {
-    log(`patch failed: ${errorMessage(err)}`);
+    log(`patch update failed: ${errorMessage(err)}`);
   }
 }
 
-async function install({ closeDeezer = false, dir = null, relaunch = true } = {}) {
-  if (!info.packaged) {
-    throw new Error("Installing needs the built executable (npm run build). To only patch Deezer, use src/cli.js.");
-  }
+async function applyPatch({ closeDeezer = false, dir = null, relaunch = true } = {}) {
   const web = findWeb(dir);
   const storeApp = dir ? null : findStore();
   if (!web && !storeApp) deezer.locate();
-
-  await setup.removeLegacyBackground();
   const wasRunning = web ? await closeIfRunning(web, closeDeezer) : false;
-  if (web) patcher.install(web.asar);
-  if (!setup.runningInstalledCopy()) setup.writeExecutable(fs.readFileSync(process.execPath));
-  setup.writeConfig({ deezerDir: dir ? web.dir : setup.readConfig().deezerDir || null });
-  registerInstall(web);
-  log(`installed v${info.version}`);
-
+  if (web) {
+    const result = patcher.install(web.asar);
+    log(`patched Deezer ${result.version}`);
+  }
+  if (storeApp) store.writePreload(storeApp);
   if (web && wasRunning && relaunch) deezer.launch(web.exe);
   if (storeApp) for (const pid of deezer.storeMainProcesses()) await injectStore(pid).catch(() => {});
 }
 
-async function uninstall({ closeDeezer = false, relaunch = true } = {}) {
-  const web = findWeb();
-  const storeApp = findStore();
-  await setup.removeLegacyBackground();
+async function removePatch({ closeDeezer = false, dir = null, relaunch = true } = {}) {
+  const web = findWeb(dir);
+  const storeApp = dir ? null : findStore();
   const wasRunning = web ? await closeIfRunning(web, closeDeezer) : false;
-  if (web) patcher.uninstall(web.asar);
+  if (web) {
+    const result = patcher.uninstall(web.asar);
+    if (result.changed) log(`restored Deezer ${result.version}`);
+  }
   if (storeApp) store.removePreload(storeApp);
-  setup.unregister();
-  setup.removeShortcuts();
-  setup.removeFiles();
   if (web && wasRunning && relaunch) deezer.launch(web.exe);
   return { storeOpen: !!storeApp && deezer.storeMainProcesses().length > 0 };
+}
+
+async function uninstall(options = {}) {
+  await setup.removeLegacyBackground();
+  const result = await removePatch(options);
+  setup.removeLegacyInstall();
+  return result;
 }
 
 async function launchDeezer() {
   const web = findWeb();
   if (web) {
-    if (setup.isInstalled()) patchIfClosed(web);
     deezer.launch(web.exe);
     return;
   }
@@ -142,7 +135,7 @@ async function launchDeezer() {
     deezer.launchStore(storeApp);
     for (let i = 0; i < STORE_START_WAIT && deezer.storeMainProcesses().length === 0; i++) await sleep(1000);
   }
-  if (!setup.isInstalled()) return;
+  if (!store.hasPreload(storeApp)) return;
   for (const pid of deezer.storeMainProcesses()) await injectStore(pid);
 }
 
@@ -150,15 +143,15 @@ let latest = null;
 
 async function checkUpdate() {
   latest = await updater.latestRelease();
-  const current = installedVersion() || info.version;
   return {
-    current,
+    current: info.version,
     latest: latest && latest.version,
-    available: !!latest && updater.compareVersions(latest.version, current) > 0,
+    available: !!latest && updater.compareVersions(latest.version, info.version) > 0,
   };
 }
 
 async function update() {
+  if (!info.packaged) throw new Error("Updating needs the built executable (npm run build).");
   const release = latest || (await updater.latestRelease());
   if (!release) throw new Error("No published version was found.");
   log(`downloading ${release.name}`);
@@ -170,13 +163,12 @@ async function update() {
 
 function afterUpdate() {
   setup.cleanupOldFiles();
-  const web = findWeb();
   try {
-    registerInstall(web);
+    setup.refreshLegacyEntry();
   } catch (err) {
-    log(`registration failed: ${errorMessage(err)}`);
+    log(`couldn't update the installed apps entry: ${errorMessage(err)}`);
   }
-  patchIfClosed(web);
+  upgradeIfClosed(findWeb());
 }
 
 async function migrate() {
@@ -185,4 +177,4 @@ async function migrate() {
   log(`v${info.version} no longer runs in the background`);
 }
 
-module.exports = { log, state, install, uninstall, launchDeezer, checkUpdate, update, afterUpdate, migrate };
+module.exports = { log, state, applyPatch, removePatch, uninstall, launchDeezer, checkUpdate, update, afterUpdate, migrate };

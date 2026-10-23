@@ -73,6 +73,14 @@
   .row-end { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
   .row.highlight .row-label { color: var(--blue-ink); }
 
+  .notice {
+    display: flex; align-items: flex-start; gap: 12px; padding: 13px 16px; border-radius: 12px;
+    background: var(--amber); color: #1f1606; font-size: 13.5px;
+  }
+  .notice .row-icon { color: #1f1606; padding-top: 1px; }
+  .notice b { font-weight: 700; }
+  .notice p { margin: 2px 0 0; }
+
   .tip { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--muted); font-size: 13px; }
   .tip .row-icon { width: 20px; }
   .tip-lines { display: grid; gap: 8px; flex: 1; }
@@ -154,6 +162,7 @@
   </header>
 
   <section class="card hero" id="hero"></section>
+  <section class="notice" id="notice" role="note" hidden></section>
   <section class="card rows" id="details" hidden></section>
   <section class="card tip" id="tip" hidden></section>
 
@@ -227,12 +236,13 @@
   }
 
   const found = () => !!(current && (current.web || current.store));
-  const needsPatch = () => !!(current && current.installed && current.web && !current.web.current);
+  const hasPatch = () => !!(current && (current.web ? current.web.patched : current.store && current.store.patched));
+  const needsPatch = () => !!(current && current.web && current.web.patched && !current.web.current);
 
   function hero() {
     if (uninstalled) {
       return {
-        tone: "ok", icon: "check", title: "Pitch changer removed",
+        tone: "ok", icon: "check", title: "Uninstalled",
         text: `Deezer is back to its original state.${uninstalled.storeOpen ? " Restart Deezer to remove it from the open window." : ""} You can close this window.`,
         actions: [button("close", "Close", "close", "primary")],
       };
@@ -248,26 +258,27 @@
         actions: [button("refresh", "Check again", "refresh", "primary")],
       };
     }
-    if (!s.installed) {
+    if (!hasPatch()) {
       return {
-        tone: "info", icon: "download", title: "Not installed",
-        text: "Adds a Pitch panel to Deezer to change the speed and the key of the music. Nothing runs in the background."
-          + (s.web && s.web.patched ? " This Deezer still has the plugin of a previous install." : ""),
-        actions: [button("install", "Install", "download", "primary")],
+        tone: "info", icon: "plug", title: "Patch not applied",
+        text: s.web
+          ? `Deezer ${s.web.version} is in its original state. The patch adds a Pitch panel to change the speed and the key of the music. A Deezer update removes it: apply it again afterwards.`
+          : "The patch adds a Pitch panel to change the speed and the key of the music.",
+        actions: [button("patch", "Apply the patch", "plug", "primary"), button("launch", "Open Deezer", "play")],
       };
     }
     if (needsPatch()) {
       return {
-        tone: "warn", icon: "alert", title: "Needs to be reapplied",
-        text: s.web.patched ? "This Deezer has the plugin of an older version." : `Deezer was updated to ${s.web.version}, which removed the plugin.`,
-        actions: [button("install", "Reapply", "rotate", "primary"), button("launch", "Open Deezer", "play")],
+        tone: "warn", icon: "alert", title: "Patch to reapply",
+        text: "This Deezer has the patch of an older version.",
+        actions: [button("patch", "Apply the patch", "rotate", "primary"), button("launch", "Open Deezer", "play")],
       };
     }
     return {
       tone: "ok", icon: "check", title: "Active",
       text: s.web
         ? `Deezer ${s.web.version} has the pitch changer.`
-        : "Open Deezer from here or with the “Deezer with Pitch Changer” shortcut: the pitch changer is added when it starts.",
+        : "Open Deezer from this window: the pitch changer is added when it starts.",
       actions: [button("launch", "Open Deezer", "play", "primary")],
     };
   }
@@ -313,26 +324,33 @@
     el.hidden = !s || !!uninstalled || !!loadError;
     if (el.hidden) return;
     const rows = [];
-    rows.push(s.installed
-      ? row("plug", "Pitch changer", "Installed for your Windows account", "", escape(`v${s.installedVersion || s.version}`))
-      : row("plug", "Pitch changer", "Not installed", "", "—"));
     if (s.web) {
       const w = s.web;
-      const [sub, tone] = !s.installed
-        ? [w.patched ? "Patched by a previous install" : "Desktop app", ""]
-        : w.current ? ["Plugin active", "ok"] : w.patched ? ["Older plugin", "warn"] : ["Plugin missing", "warn"];
+      const [sub, tone] = w.current ? ["Patch applied", "ok"] : w.patched ? ["Older patch", "warn"] : ["Original state", ""];
       rows.push(row("music", "Deezer", sub, tone, escape(w.version)));
     }
     if (s.store) {
-      rows.push(row("bag", "Deezer · Microsoft Store", s.installed ? "Added each time it is opened with the shortcut" : "Microsoft Store app", "", escape(s.store.version)));
+      const [sub, tone] = s.store.patched ? ["Added each time it is opened from this window", "ok"] : ["Patch not applied", ""];
+      rows.push(row("bag", "Deezer · Microsoft Store", sub, tone, escape(s.store.version)));
     }
     if (!s.web && !s.store) rows.push(row("music", "Deezer", "Not found", "err", "—"));
     rows.push(updateRow());
     el.innerHTML = rows.join("");
   }
 
+  function renderNotice() {
+    const s = current;
+    const show = !!s && !!s.store && !uninstalled && !loadError;
+    $("notice").hidden = !show;
+    if (!show) return;
+    const text = s.web
+      ? "Its files can't be patched: it only gets the pitch changer when it is opened from this window. <b>Open Deezer</b> opens the version from deezer.com."
+      : "Its files can't be patched: to get the pitch changer, always open Deezer with the <b>Open Deezer</b> button of this window. Opened from the Start menu or the taskbar, it starts without it.";
+    $("notice").innerHTML = `<span class="row-icon">${icon("alert", 18)}</span><div><b>Microsoft Store version of Deezer detected</b><p>${text}</p></div>`;
+  }
+
   function renderTip() {
-    const show = !!current && current.installed && found() && !uninstalled;
+    const show = !!current && found() && hasPatch() && !uninstalled;
     $("tip").hidden = !show;
     if (!show) return;
     $("tip").innerHTML = `<span class="row-icon">${icon("keyboard")}</span><div class="tip-lines">`
@@ -343,10 +361,7 @@
   function renderFooter() {
     const s = current;
     const actions = [];
-    if (s && !uninstalled && found()) {
-      if (s.installed && !needsPatch()) actions.push(button("install", "Reinstall", "rotate", "ghost"));
-      if (s.installed || (s.web && s.web.patched)) actions.push(button("uninstall", "Uninstall", "trash", "ghost risky"));
-    }
+    if (s && !uninstalled && found() && hasPatch()) actions.push(button("unpatch", "Remove the patch", "trash", "ghost risky"));
     $("footer-actions").innerHTML = actions.join("");
     $("version").textContent = s ? `Version ${s.version}` : "";
   }
@@ -361,6 +376,7 @@
   function render() {
     renderHero();
     renderDetails();
+    renderNotice();
     renderTip();
     renderFooter();
     applyBusy();
@@ -452,13 +468,14 @@
   }
 
   const actions = {
-    install: () => {
-      const message = !current.installed ? "Installed. Open Deezer to try it." : needsPatch() ? "Plugin reapplied." : "Reinstalled.";
-      return run("install", "/api/install", async () => {
-        await refresh();
-        toast(message);
-      });
-    },
+    patch: () => run("patch", "/api/patch", async () => {
+      await refresh();
+      toast("Patch applied.");
+    }),
+    unpatch: () => run("unpatch", "/api/unpatch", async (result) => {
+      await refresh();
+      toast(result.storeOpen ? "Patch removed. Restart Deezer to remove it from the open window." : "Patch removed.");
+    }),
     launch: () => run("launch", "/api/launch", async () => {
       toast("Deezer is opening.");
       setTimeout(() => refresh(), 2500);
@@ -466,8 +483,8 @@
     uninstall: async () => {
       if (busy) return;
       const confirmed = await ask({
-        title: "Uninstall the pitch changer?",
-        text: "Deezer will be restored to its original state and the Start menu shortcuts removed.",
+        title: "Uninstall Deezer Pitch Changer?",
+        text: "The patch will be removed from Deezer, which is restored to its original state, and Deezer Pitch Changer uninstalled.",
         ok: "Uninstall",
         tone: "err",
         iconName: "trash",
@@ -477,7 +494,7 @@
     },
     update: () => run("update", "/api/update", () => {
       restarting = true;
-      toast(`Version ${update.latest} installed. Restarting…`);
+      toast(`Updated to version ${update.latest}. Restarting…`);
       setTimeout(() => window.close(), 900);
     }),
     check: checkUpdate,
@@ -504,7 +521,7 @@
     await refresh();
     if (params.get("notice") === "updated" && current) toast(`Updated to version ${current.version}.`);
     checkUpdate();
-    if (params.get("dialog") === "uninstall" && current && (current.installed || (current.web && current.web.patched))) actions.uninstall();
+    if (params.get("dialog") === "uninstall" && current && (current.legacyInstall || hasPatch())) actions.uninstall();
   })();
 </script>
 </body>

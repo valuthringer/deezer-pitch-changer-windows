@@ -62,7 +62,8 @@ function claim(onShow) {
     const server = net.createServer((socket) => {
       socket.on("error", () => {});
       socket.on("data", (data) => {
-        if (String(data).includes("show")) onShow();
+        const [command, dialog] = String(data).trim().split(" ");
+        if (command === "show") onShow(dialog || null);
         socket.end();
       });
     });
@@ -71,9 +72,9 @@ function claim(onShow) {
   });
 }
 
-function showRunning() {
+function showRunning(dialog) {
   return new Promise((resolve) => {
-    const socket = net.connect(PIPE, () => socket.end("show\n", () => resolve(true)));
+    const socket = net.connect(PIPE, () => socket.end(`show ${dialog || ""}\n`, () => resolve(true)));
     socket.on("error", () => resolve(false));
   });
 }
@@ -104,11 +105,12 @@ function send(res, status, data) {
 async function run({ notice = null, dialog = null } = {}) {
   const token = crypto.randomBytes(16).toString("hex");
   let origin = null;
+  const pageUrl = (extra) => `${origin}/?${new URLSearchParams({ t: token, ...extra })}`;
 
   let lock = null;
   for (let i = 0; i < 10 && !lock; i++) {
-    lock = await claim(() => origin && openWindow(`${origin}/?t=${token}`));
-    if (!lock && (await showRunning())) return;
+    lock = await claim((shown) => origin && openWindow(pageUrl(shown === "uninstall" ? { dialog: shown } : {})));
+    if (!lock && (await showRunning(dialog))) return;
     if (!lock) await sleep(500);
   }
 
@@ -131,7 +133,7 @@ async function run({ notice = null, dialog = null } = {}) {
   const restart = async () => {
     restarting = true;
     if (lock) await new Promise((resolve) => lock.close(resolve));
-    setup.startInstalled(["--updated"]);
+    setup.startSelf(["--updated"]);
     setTimeout(() => process.exit(0), 500);
   };
 
@@ -148,7 +150,8 @@ async function run({ notice = null, dialog = null } = {}) {
   const routes = {
     "GET /api/state": () => manager.state(),
     "GET /api/update": () => manager.checkUpdate(),
-    "POST /api/install": exclusive((body) => manager.install({ closeDeezer: !!body.closeDeezer }).then(() => ({ ok: true }))),
+    "POST /api/patch": exclusive((body) => manager.applyPatch({ closeDeezer: !!body.closeDeezer }).then(() => ({ ok: true }))),
+    "POST /api/unpatch": exclusive((body) => manager.removePatch({ closeDeezer: !!body.closeDeezer })),
     "POST /api/uninstall": exclusive((body) => manager.uninstall({ closeDeezer: !!body.closeDeezer })),
     "POST /api/launch": exclusive(() => manager.launchDeezer().then(() => ({ ok: true }))),
     "POST /api/update": exclusive(async () => {
@@ -198,8 +201,7 @@ async function run({ notice = null, dialog = null } = {}) {
 
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
-  const query = new URLSearchParams({ t: token, ...(notice && { notice }), ...(dialog && { dialog }) });
-  openWindow(`${origin}/?${query}`);
+  openWindow(pageUrl({ ...(notice && { notice }), ...(dialog && { dialog }) }));
 }
 
 module.exports = { run };
